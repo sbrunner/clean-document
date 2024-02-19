@@ -1,21 +1,49 @@
 from keras.applications.vgg16 import VGG16
 from keras.models import Model
 from keras.layers import Dense, GlobalAveragePooling2D
+import keras.saving
+from keras_preprocessing.image import save_img
+import glob
+
+import numpy as np  # linear algebra
+import pandas as pd  # data processing, CSV file I/O (e.g. pd.read_csv)
+
+import os.path
+import math
+import sys
+
+import keras.saving
+import matplotlib.pyplot as plt
+from keras_preprocessing.image import load_img, array_to_img, img_to_array
+
+# from keras.popencv-pythonopencv-pythonopencv-pythonreprocessing.image import load_img, array_to_img, img_to_array
+from keras.models import Sequential, Model
+from keras.layers import Dense, Conv2D, MaxPooling2D, UpSampling2D, Flatten, Input
+from keras.optimizers import SGD, Adam, Adadelta, Adagrad
+from keras import backend as K
+from sklearn.model_selection import train_test_split
 
 from keras.models import Model
 from keras.optimizers import Adam
 from keras.layers import Input, Dense, Activation, BatchNormalization, Conv2D, LeakyReLU
 from keras.layers import MaxPooling2D, Dropout, UpSampling2D
-
+import cv2
+import glob
+import numpy as np
+from scipy import ndimage
+from keras.preprocessing import image
 from keras.applications.vgg16 import VGG16
 
 
 def build_model2() -> Model:
-    base_model = VGG16(weights="imagenet", include_top=False, input_shape=(420, 540, 3))
+    base_model = VGG16(weights="imagenet", include_top=False, input_shape=(224, 224, 3))
 
     # Freeze the layers
     for layer in base_model.layers:
         layer.trainable = False
+
+    base_model.layers.pop()
+    base_model.layers.pop()
 
     # Add your own layers
     x = base_model.output
@@ -36,13 +64,13 @@ def build_model2() -> Model:
     output_layer = Conv2D(1, (3, 3), activation="sigmoid", padding="same")(x)
 
     m = Model(base_model.input, output_layer)
-    optimizer = Adam(lr=0.001)
+    optimizer = Adam(learning_rate=0.001)
     m.compile(loss="mse", optimizer=optimizer)
     return m
 
 
 def build_model() -> Model:
-    input_layer = Input(shape=(420, 540, 3))
+    input_layer = Input(shape=(224, 224, 1))
 
     # encoder
     h = Conv2D(64, (3, 3), padding="same")(input_layer)
@@ -62,19 +90,21 @@ def build_model() -> Model:
     output_layer = Conv2D(1, (3, 3), activation="sigmoid", padding="same")(h)
 
     m = Model(input_layer, output_layer)
-    optimizer = Adam(lr=0.001)
+    optimizer = Adam(learning_rate=0.001)
     m.compile(loss="mse", optimizer=optimizer)
     return m
 
 
 def build_autoencoder2() -> Model:
-    input_img = Input(shape=(420, 540, 3), name="image_input")
+    input_img = Input(shape=(224, 224, 3), name="image_input")
 
-    base_model = VGG16(weights="imagenet", include_top=False, input_shape=(420, 540, 3))
+    base_model = VGG16(weights="imagenet", include_top=False, input_shape=(224, 224, 3))
 
     # Freeze the layers
     for layer in base_model.layers:
         layer.trainable = False
+    base_model.layers.pop()
+    base_model.layers.pop()
 
     # Add your own layers
     x = base_model.output
@@ -100,7 +130,7 @@ def build_autoencoder2() -> Model:
 
 
 def build_autoencoder() -> Model:
-    input_img = Input(shape=(420, 540, 3), name="image_input")
+    input_img = Input(shape=(224, 224, 1), name="image_input")
 
     # Encoder
     x = Conv2D(32, (3, 3), activation="relu", padding="same", name="Conv1")(input_img)
@@ -130,6 +160,8 @@ def build_model_imagenet() -> Model:
     # First: train only the top layers (which were randomly initialized)
     for layer in base_model.layers:
         layer.trainable = False
+    base_model.layers.pop()
+    base_model.layers.pop()
 
     # Add a global spatial average pooling layer
     x = base_model.output
@@ -157,6 +189,8 @@ def build_model_imagenet_less() -> Model:
     # First: train only the top layers (which were randomly initialized)
     for layer in base_model.layers:
         layer.trainable = False
+    base_model.layers.pop()
+    base_model.layers.pop()
 
     # Add a global spatial average pooling layer
     x = base_model.output
@@ -184,6 +218,8 @@ def build_model_imagenet_less_2() -> Model:
     # First: train only the top layers (which were randomly initialized)
     for layer in base_model.layers:
         layer.trainable = False
+    base_model.layers.pop()
+    base_model.layers.pop()
 
     # Add a global spatial average pooling layer
     x = base_model.output
@@ -211,6 +247,8 @@ def build_model_imagenet_less_3() -> Model:
     # First: train only the top layers (which were randomly initialized)
     for layer in base_model.layers:
         layer.trainable = False
+    base_model.layers.pop()
+    base_model.layers.pop()
 
     # Add a global spatial average pooling layer
     x = base_model.output
@@ -230,49 +268,154 @@ def build_model_imagenet_less_3() -> Model:
     return model
 
 
-# Total params: 113665 (444.00 KB)
-# Trainable params: 113409 (443.00 KB)
-# Non-trainable params: 256 (1.00 KB)
-m = build_model()
-m.summary()
+def data_augmentation():
+    for category in ("train-x", "train-y"):
+        images = glob.glob(os.path.join("data", category, "*.png"))
+        for image_filename in images:
+            image = cv2.imread(image_filename)
 
-# Total params: 15121537 (57.68 MB)
-# Trainable params: 406593 (1.55 MB)
-# Non-trainable params: 14714944 (56.13 MB)
-m = build_model2()
-m.summary()
+            # split the image into regular 224x224 images
+            nb_x = math.ceil(image.shape[0] / 224)
+            nb_y = math.ceil(image.shape[1] / 224)
+            slide_x = 224 - (224 * nb_x - image.shape[0]) / nb_x
+            slide_y = 224 - (224 * nb_y - image.shape[1]) / nb_y
+            for x in range(nb_x):
+                for y in range(nb_y):
+                    x0 = round(x * slide_x)
+                    y0 = round(y * slide_y)
+                    cropped = image[x0 : x0 + 224, y0 : y0 + 224]
 
-# Total params: 15250250 (58.18 MB)
-# Trainable params: 535562 (2.04 MB)
-# Non-trainable params: 14714688 (56.13 MB)
-m = build_model_imagenet()
-m.summary()
+                    dest_folder = os.path.join("augmented_data", category)
+                    if not os.path.exists(dest_folder):
+                        os.makedirs(dest_folder)
 
-# Total params: 75073 (293.25 KB)
-# Trainable params: 75073 (293.25 KB)
-# Non-trainable params: 0 (0.00 Byte)
-m = build_autoencoder()
-m.summary()
+                    cv2.imwrite(
+                        os.path.join(
+                            dest_folder,
+                            f"cropped-{x}-{y}-{os.path.basename(image_filename)}",
+                        ),
+                        cropped,
+                    )
+                    cv2.imwrite(
+                        os.path.join(
+                            dest_folder,
+                            f"rotated-{x}-{y}-{os.path.basename(image_filename)}",
+                        ),
+                        ndimage.rotate(cropped, 180),
+                    )
 
-<<<<<<< HEAD
-#m = build_autoencoder2()
-#m.summary()
 
-# Total params: 14982474 (57.15 MB)
-# Trainable params: 267786 (1.02 MB)
-# Non-trainable params: 14714688 (56.13 MB)
-m = build_model_imagenet_less()
-m.summary()
-||||||| parent of 4d953aa (Add model with less parameters)
-#m = build_autoencoder2()
-#m.summary()
-=======
-# m = build_autoencoder2()
-# m.summary()
+def load_image(path):
+    image_list = np.zeros((len(path), 224, 224, 1))
+    for i, fig in enumerate(path):
+        img = image.load_img(fig, color_mode="grayscale", target_size=(224, 224, 1))
+        x = image.img_to_array(img).astype("float32")
+        image_list[i] = x
 
-# Total params: 14982474 (57.15 MB)
-# Trainable params: 267786 (1.02 MB)
-# Non-trainable params: 14714688 (56.13 MB)
-m = build_model_imagenet_less()
-m.summary()
->>>>>>> 4d953aa (Add model with less parameters)
+    return image_list
+
+
+def train_val_split(x_train, y_train):
+    x_train = x_train / 255.0
+    y_train = y_train / 255.0
+    rnd = np.random.RandomState(seed=42)
+    perm = rnd.permutation(len(x_train))
+    train_idx = perm[: int(0.8 * len(x_train))]
+    val_idx = perm[int(0.8 * len(x_train)) :]
+    return x_train[train_idx], y_train[train_idx], x_train[val_idx], y_train[val_idx]
+
+
+def train_model(name, model, x_train, y_train, x_val, y_val, epochs, batch_size=20):
+    # early_stopping = EarlyStopping(monitor='val_loss',
+    #                                min_delta=0,
+    #                                patience=5,
+    #                                verbose=1,
+    #                                mode='auto')
+    history = model.fit(
+        x_train,
+        y_train,
+        batch_size=batch_size,
+        epochs=epochs,
+        validation_data=(x_val, y_val),
+    )
+    plt.plot(history.history["loss"])
+    plt.plot(history.history["val_loss"])
+    plt.title("Model loss")
+    plt.ylabel("Loss")
+    plt.xlabel("Epoch")
+    plt.legend(["Train", "Test"], loc="upper left")
+    # save plot to file
+    plt.savefig(f"{name}.png")
+
+
+def apply(model, name, path):
+    print(path)
+    sample_test = img_to_array(load_img(path))
+    print(sample_test.shape)
+
+    # Convert the image to yuv
+    sample_test = cv2.cvtColor(sample_test, cv2.COLOR_BGR2YUV)
+    print(sample_test.shape)
+    # Get Y channel
+    sample_test2 = sample_test[:, :, 0]
+    print(sample_test2.shape)
+    #sample_test2 = img_to_array(sample_test2)
+    print(sample_test2.shape)
+
+    sample_test_img = sample_test.astype("float32") / 255.0
+    sample_test_img = np.expand_dims(sample_test, axis=0)
+    print(sample_test_img.shape)
+
+    # Get the prediction
+    predicted_label = np.squeeze(model.predict(sample_test_img))
+    sample_test[:, :, 0] = predicted_label
+    data = cv2.cvtColor(sample_test, cv2.COLOR_YUV2BGR)
+    save_img(f"{name}-{os.path.basename(path)}", data)
+
+    data = np.zeros( (predicted_label.shape[0],predicted_label.shape[1],1), dtype=np.uint8)
+    data[:,:,0] = predicted_label
+    save_img(f"{name}-gray-{os.path.basename(path)}", data)
+
+
+def train():
+    TRAIN_IMAGES = glob.glob("augmented_data/train-x/*.png")
+    CLEAN_IMAGES = glob.glob("augmented_data/train-y/*.png")
+
+    x_train = load_image(TRAIN_IMAGES)
+    y_train = load_image(CLEAN_IMAGES)
+    print(x_train.shape, y_train.shape)
+
+    x_train, y_train, x_val, y_val = train_val_split(x_train, y_train)
+    print(x_train.shape, y_train.shape, x_val.shape, y_val.shape)
+    for name, model in (
+        # ("model", build_model()),
+        # ("model2", build_model2()),
+        ("autoencoder", build_autoencoder()),
+        # ("autoencoder2", build_autoencoder2()),
+        # ("model_imagenet", build_model_imagenet()),
+        # ("model_imagenet_less", build_model_imagenet_less()),
+        # ("model_imagenet_less_2", build_model_imagenet_less_2()),
+        # ("model_imagenet_less_3", build_model_imagenet_less_3()),
+    ):
+        model.summary()
+        print(dir(model))
+        try:
+            # train_model(
+            #    name, model, x_train, y_train, x_val, y_val, epochs=20, batch_size=20
+            # )
+            # Save the model
+            # model.save(f"{name}.h5", overwrite=True)
+            # Load model
+            model = keras.saving.load_model("model.h5")
+            images = glob.glob("data/train-x/*.png")
+            for image_path in images:
+                apply(model, name, image_path)
+        except Exception as e:
+            print(f"Failed to train model {name}: {e}")
+            import traceback
+
+            print(traceback.format_exc())
+            raise e
+
+
+train()
