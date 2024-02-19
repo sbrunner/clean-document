@@ -145,6 +145,32 @@ def build_model_imagenet() -> Model:
     model.compile(optimizer='rmsprop', loss='categorical_crossentropy')
     return model
 
+def build_model_imagenet_less() -> Model:
+
+    # Load the VGG16 model
+    base_model = VGG16(weights='imagenet', include_top=False, input_shape=(224, 224, 3))
+
+    # Add a global spatial average pooling layer
+    x = base_model.output
+    x = GlobalAveragePooling2D()(x)
+
+    # Add a fully-connected layer with fewer neurons
+    x = Dense(512, activation='relu')(x)  # Reduced from 1024 to 512
+
+    # Add a logistic layer with the number of classes you have (let's say 10)
+    predictions = Dense(10, activation='softmax')(x)
+
+    # This is the model we will train
+    model = Model(inputs=base_model.input, outputs=predictions)
+
+    # First: train only the top layers (which were randomly initialized)
+    for layer in base_model.layers:
+        layer.trainable = False
+
+    # Compile the model
+    model.compile(optimizer='rmsprop', loss='categorical_crossentropy')
+    return model
+
 # Total params: 113665 (444.00 KB)
 # Trainable params: 113409 (443.00 KB)
 # Non-trainable params: 256 (1.00 KB)
@@ -171,3 +197,9 @@ m.summary()
 
 #m = build_autoencoder2()
 #m.summary()
+
+# Total params: 14982474 (57.15 MB)
+# Trainable params: 267786 (1.02 MB)
+# Non-trainable params: 14714688 (56.13 MB)
+m = build_model_imagenet_less()
+m.summary()
