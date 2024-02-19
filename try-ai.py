@@ -190,7 +190,7 @@ def build_model_imagenet_less_2() -> Model:
     x = GlobalAveragePooling2D()(x)
 
     # Add a fully-connected layer with fewer neurons
-    x = Dense(256, activation="relu")(x)  # Reduced from 1024 to 512
+    x = Dense(256, activation="relu")(x)  # Reduced from 1024 to 256
 
     # Add a logistic layer with the number of classes you have (let's say 10)
     predictions = Dense(10, activation="softmax")(x)
@@ -217,7 +217,7 @@ def build_model_imagenet_less_3() -> Model:
     x = GlobalAveragePooling2D()(x)
 
     # Add a fully-connected layer with fewer neurons
-    x = Dense(128, activation="relu")(x)  # Reduced from 1024 to 512
+    x = Dense(128, activation="relu")(x)  # Reduced from 1024 to 128
 
     # Add a logistic layer with the number of classes you have (let's say 10)
     predictions = Dense(10, activation="softmax")(x)
