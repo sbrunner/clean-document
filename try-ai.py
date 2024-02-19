@@ -1,3 +1,11 @@
+# TODO:
+# - Fix model
+# - Add more data augmentation (flip)
+# - Use bigger images (224 => 2000)
+# - Fix image end in data augmentation
+# - Try in color
+
+
 from keras.applications.vgg16 import VGG16
 from keras.models import Model
 from keras.layers import Dense, GlobalAveragePooling2D
@@ -35,40 +43,6 @@ from keras.preprocessing import image
 from keras.applications.vgg16 import VGG16
 
 
-def build_model2() -> Model:
-    base_model = VGG16(weights="imagenet", include_top=False, input_shape=(224, 224, 3))
-
-    # Freeze the layers
-    for layer in base_model.layers:
-        layer.trainable = False
-
-    base_model.layers.pop()
-    base_model.layers.pop()
-
-    # Add your own layers
-    x = base_model.output
-    x = Conv2D(64, (3, 3), padding="same")(x)
-    x = LeakyReLU(0.1)(x)
-    x = BatchNormalization()(x)
-    x = Conv2D(64, (3, 3), padding="same")(x)
-    x = LeakyReLU(0.1)(x)
-    x = MaxPooling2D((2, 2), padding="same")(x)
-
-    x = Conv2D(64, (3, 3), padding="same")(x)
-    x = LeakyReLU(0.1)(x)
-    x = BatchNormalization()(x)
-    # decoder
-    x = Conv2D(64, (3, 3), padding="same")(x)
-    x = LeakyReLU(0.1)(x)
-    x = UpSampling2D((2, 2))(x)
-    output_layer = Conv2D(1, (3, 3), activation="sigmoid", padding="same")(x)
-
-    m = Model(base_model.input, output_layer)
-    optimizer = Adam(learning_rate=0.001)
-    m.compile(loss="mse", optimizer=optimizer)
-    return m
-
-
 def build_model() -> Model:
     input_layer = Input(shape=(224, 224, 1))
 
@@ -95,39 +69,6 @@ def build_model() -> Model:
     return m
 
 
-def build_autoencoder2() -> Model:
-    input_img = Input(shape=(224, 224, 3), name="image_input")
-
-    base_model = VGG16(weights="imagenet", include_top=False, input_shape=(224, 224, 3))
-
-    # Freeze the layers
-    for layer in base_model.layers:
-        layer.trainable = False
-    base_model.layers.pop()
-    base_model.layers.pop()
-
-    # Add your own layers
-    x = base_model.output
-
-    # Encoder
-    x = Conv2D(32, (3, 3), activation="relu", padding="same", name="Conv1")(x)
-    x = MaxPooling2D((2, 2), padding="same", name="pool1")(x)
-    x = Conv2D(64, (3, 3), activation="relu", padding="same", name="Conv2")(x)
-    x = MaxPooling2D((2, 2), padding="same", name="pool2")(x)
-
-    # Decoder
-    x = Conv2D(64, (3, 3), activation="relu", padding="same", name="Conv3")(x)
-    x = UpSampling2D((2, 2), name="upsample1")(x)
-    x = Conv2D(32, (3, 3), activation="relu", padding="same", name="Conv4")(x)
-    x = UpSampling2D((2, 2), name="upsample2")(x)
-    x = Conv2D(1, (3, 3), activation="sigmoid", padding="same", name="Conv5")(x)
-
-    # Model
-    autoencoder = Model(inputs=input_img, outputs=x)
-    autoencoder.compile(optimizer="adam", loss="binary_crossentropy")
-
-    return autoencoder
-
 
 def build_autoencoder() -> Model:
     input_img = Input(shape=(224, 224, 1), name="image_input")
@@ -151,144 +92,6 @@ def build_autoencoder() -> Model:
 
     return autoencoder
 
-
-def build_autoencoder_q() -> Model:
-    input_img = Input(shape=(224, 224, 1), name="image_input")
-
-    # Encoder
-    x = Conv2D(32, (3, 3), activation="relu", padding="same", name="Conv1")(input_img)
-    x = MaxPooling2D((2, 2), padding="same", name="pool1")(x)
-    x = Conv2D(64, (3, 3), activation="relu", padding="same", name="Conv2")(x)
-    x = MaxPooling2D((2, 2), padding="same", name="pool2")(x)
-
-    # Decoder
-    x = Conv2D(64, (3, 3), activation="relu", padding="same", name="Conv3")(x)
-    x = UpSampling2D((2, 2), name="upsample1")(x)
-    x = Conv2D(32, (3, 3), activation="relu", padding="same", name="Conv4")(x)
-    x = UpSampling2D((2, 2), name="upsample2")(x)
-    x = Conv2D(1, (3, 3), activation="sigmoid", padding="same", name="Conv5")(x)
-
-    # Model
-    autoencoder = Model(inputs=input_img, outputs=x)
-    autoencoder.compile(optimizer="adam", loss="binary_crossentropy")
-
-    return autoencoder
-
-
-def build_model_imagenet() -> Model:
-
-    # Load the VGG16 model
-    base_model = VGG16(weights="imagenet", include_top=False, input_shape=(224, 224, 3))
-
-    # First: train only the top layers (which were randomly initialized)
-    for layer in base_model.layers:
-        layer.trainable = False
-    base_model.layers.pop()
-    base_model.layers.pop()
-
-    # Add a global spatial average pooling layer
-    x = base_model.output
-    x = GlobalAveragePooling2D()(x)
-
-    # Add a fully-connected layer
-    x = Dense(1024, activation="relu")(x)
-
-    # Add a logistic layer with the number of classes you have (let's say 10)
-    predictions = Dense(10, activation="softmax")(x)
-
-    # This is the model we will train
-    model = Model(inputs=base_model.input, outputs=predictions)
-
-    # Compile the model
-    model.compile(optimizer="rmsprop", loss="categorical_crossentropy")
-    return model
-
-
-def build_model_imagenet_less() -> Model:
-
-    # Load the VGG16 model
-    base_model = VGG16(weights="imagenet", include_top=False, input_shape=(224, 224, 3))
-
-    # First: train only the top layers (which were randomly initialized)
-    for layer in base_model.layers:
-        layer.trainable = False
-    base_model.layers.pop()
-    base_model.layers.pop()
-
-    # Add a global spatial average pooling layer
-    x = base_model.output
-    x = GlobalAveragePooling2D()(x)
-
-    # Add a fully-connected layer with fewer neurons
-    x = Dense(512, activation="relu")(x)  # Reduced from 1024 to 512
-
-    # Add a logistic layer with the number of classes you have (let's say 10)
-    predictions = Dense(10, activation="softmax")(x)
-
-    # This is the model we will train
-    model = Model(inputs=base_model.input, outputs=predictions)
-
-    # Compile the model
-    model.compile(optimizer="rmsprop", loss="categorical_crossentropy")
-    return model
-
-
-def build_model_imagenet_less_2() -> Model:
-
-    # Load the VGG16 model
-    base_model = VGG16(weights="imagenet", include_top=False, input_shape=(224, 224, 3))
-
-    # First: train only the top layers (which were randomly initialized)
-    for layer in base_model.layers:
-        layer.trainable = False
-    base_model.layers.pop()
-    base_model.layers.pop()
-
-    # Add a global spatial average pooling layer
-    x = base_model.output
-    x = GlobalAveragePooling2D()(x)
-
-    # Add a fully-connected layer with fewer neurons
-    x = Dense(256, activation="relu")(x)  # Reduced from 1024 to 256
-
-    # Add a logistic layer with the number of classes you have (let's say 10)
-    predictions = Dense(10, activation="softmax")(x)
-
-    # This is the model we will train
-    model = Model(inputs=base_model.input, outputs=predictions)
-
-    # Compile the model
-    model.compile(optimizer="rmsprop", loss="categorical_crossentropy")
-    return model
-
-
-def build_model_imagenet_less_3() -> Model:
-
-    # Load the VGG16 model
-    base_model = VGG16(weights="imagenet", include_top=False, input_shape=(224, 224, 3))
-
-    # First: train only the top layers (which were randomly initialized)
-    for layer in base_model.layers:
-        layer.trainable = False
-    base_model.layers.pop()
-    base_model.layers.pop()
-
-    # Add a global spatial average pooling layer
-    x = base_model.output
-    x = GlobalAveragePooling2D()(x)
-
-    # Add a fully-connected layer with fewer neurons
-    x = Dense(128, activation="relu")(x)  # Reduced from 1024 to 128
-
-    # Add a logistic layer with the number of classes you have (let's say 10)
-    predictions = Dense(10, activation="softmax")(x)
-
-    # This is the model we will train
-    model = Model(inputs=base_model.input, outputs=predictions)
-
-    # Compile the model
-    model.compile(optimizer="rmsprop", loss="categorical_crossentropy")
-    return model
 
 
 def data_augmentation():
