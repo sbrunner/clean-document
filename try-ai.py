@@ -152,6 +152,29 @@ def build_autoencoder() -> Model:
     return autoencoder
 
 
+def build_autoencoder_q() -> Model:
+    input_img = Input(shape=(224, 224, 1), name="image_input")
+
+    # Encoder
+    x = Conv2D(32, (3, 3), activation="relu", padding="same", name="Conv1")(input_img)
+    x = MaxPooling2D((2, 2), padding="same", name="pool1")(x)
+    x = Conv2D(64, (3, 3), activation="relu", padding="same", name="Conv2")(x)
+    x = MaxPooling2D((2, 2), padding="same", name="pool2")(x)
+
+    # Decoder
+    x = Conv2D(64, (3, 3), activation="relu", padding="same", name="Conv3")(x)
+    x = UpSampling2D((2, 2), name="upsample1")(x)
+    x = Conv2D(32, (3, 3), activation="relu", padding="same", name="Conv4")(x)
+    x = UpSampling2D((2, 2), name="upsample2")(x)
+    x = Conv2D(1, (3, 3), activation="sigmoid", padding="same", name="Conv5")(x)
+
+    # Model
+    autoencoder = Model(inputs=input_img, outputs=x)
+    autoencoder.compile(optimizer="adam", loss="binary_crossentropy")
+
+    return autoencoder
+
+
 def build_model_imagenet() -> Model:
 
     # Load the VGG16 model
@@ -359,7 +382,7 @@ def apply(model, name, path):
     # Get Y channel
     sample_test2 = sample_test[:, :, 0]
     print(sample_test2.shape)
-    #sample_test2 = img_to_array(sample_test2)
+    # sample_test2 = img_to_array(sample_test2)
     print(sample_test2.shape)
 
     sample_test_img = sample_test.astype("float32") / 255.0
@@ -372,8 +395,33 @@ def apply(model, name, path):
     data = cv2.cvtColor(sample_test, cv2.COLOR_YUV2BGR)
     save_img(f"{name}-{os.path.basename(path)}", data)
 
-    data = np.zeros( (predicted_label.shape[0],predicted_label.shape[1],1), dtype=np.uint8)
-    data[:,:,0] = predicted_label
+    data = np.zeros(
+        (predicted_label.shape[0], predicted_label.shape[1], 1), dtype=np.uint8
+    )
+    data[:, :, 0] = predicted_label
+    save_img(f"{name}-gray-{os.path.basename(path)}", data)
+
+
+def apply2(model, name, path):
+    print(path)
+    sample_test = load_img(path, color_mode="grayscale", target_size=(224, 224))
+    sample_test = load_img(path, color_mode="grayscale")
+    # sample_test = load_img(path, target_size=(224, 224))
+    sample_test = img_to_array(sample_test)
+    print(sample_test.shape)
+    print(np.min(sample_test), np.max(sample_test))
+    sample_test_img = sample_test.astype("float32") / 255.0
+    sample_test_img = np.expand_dims(sample_test, axis=0)
+    print(sample_test_img.shape)
+
+    # Get the prediction
+    predicted_label = np.squeeze(model.predict(sample_test_img))
+    print(np.min(predicted_label), np.max(predicted_label))
+    print(predicted_label.shape)
+    data = np.zeros(
+        (predicted_label.shape[0], predicted_label.shape[1], 1), dtype=np.uint8
+    )
+    data[:, :, 0] = predicted_label
     save_img(f"{name}-gray-{os.path.basename(path)}", data)
 
 
@@ -398,18 +446,18 @@ def train():
         # ("model_imagenet_less_3", build_model_imagenet_less_3()),
     ):
         model.summary()
-        print(dir(model))
         try:
-            # train_model(
+            #train_model(
             #    name, model, x_train, y_train, x_val, y_val, epochs=20, batch_size=20
-            # )
+            #)
             # Save the model
-            # model.save(f"{name}.h5", overwrite=True)
+            #model.save(f"{name}.keras", overwrite=True)
             # Load model
-            model = keras.saving.load_model("model.h5")
+            model = keras.saving.load_model(f"{name}.keras")
+            model.summary()
             images = glob.glob("data/train-x/*.png")
             for image_path in images:
-                apply(model, name, image_path)
+                apply2(model, name, image_path)
         except Exception as e:
             print(f"Failed to train model {name}: {e}")
             import traceback

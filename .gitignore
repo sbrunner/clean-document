@@ -1,2 +1,4 @@
 /data
 /train.tar.bz2
+/augmented_data/
+/autoencoder-*.png
