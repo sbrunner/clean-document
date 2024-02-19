@@ -9,8 +9,9 @@ from keras.layers import MaxPooling2D, Dropout, UpSampling2D
 
 from keras.applications.vgg16 import VGG16
 
+
 def build_model2() -> Model:
-    base_model = VGG16(weights='imagenet', include_top=False, input_shape=(420, 540, 3))
+    base_model = VGG16(weights="imagenet", include_top=False, input_shape=(420, 540, 3))
 
     # Freeze the layers
     for layer in base_model.layers:
@@ -38,6 +39,7 @@ def build_model2() -> Model:
     optimizer = Adam(lr=0.001)
     m.compile(loss="mse", optimizer=optimizer)
     return m
+
 
 def build_model() -> Model:
     input_layer = Input(shape=(420, 540, 3))
@@ -68,7 +70,7 @@ def build_model() -> Model:
 def build_autoencoder2() -> Model:
     input_img = Input(shape=(420, 540, 3), name="image_input")
 
-    base_model = VGG16(weights='imagenet', include_top=False, input_shape=(420, 540, 3))
+    base_model = VGG16(weights="imagenet", include_top=False, input_shape=(420, 540, 3))
 
     # Freeze the layers
     for layer in base_model.layers:
@@ -119,57 +121,114 @@ def build_autoencoder() -> Model:
 
     return autoencoder
 
+
 def build_model_imagenet() -> Model:
 
     # Load the VGG16 model
-    base_model = VGG16(weights='imagenet', include_top=False, input_shape=(224, 224, 3))
+    base_model = VGG16(weights="imagenet", include_top=False, input_shape=(224, 224, 3))
+
+    # First: train only the top layers (which were randomly initialized)
+    for layer in base_model.layers:
+        layer.trainable = False
 
     # Add a global spatial average pooling layer
     x = base_model.output
     x = GlobalAveragePooling2D()(x)
 
     # Add a fully-connected layer
-    x = Dense(1024, activation='relu')(x)
+    x = Dense(1024, activation="relu")(x)
 
     # Add a logistic layer with the number of classes you have (let's say 10)
-    predictions = Dense(10, activation='softmax')(x)
+    predictions = Dense(10, activation="softmax")(x)
 
     # This is the model we will train
     model = Model(inputs=base_model.input, outputs=predictions)
 
-    # First: train only the top layers (which were randomly initialized)
-    for layer in base_model.layers:
-        layer.trainable = False
-
     # Compile the model
-    model.compile(optimizer='rmsprop', loss='categorical_crossentropy')
+    model.compile(optimizer="rmsprop", loss="categorical_crossentropy")
     return model
+
 
 def build_model_imagenet_less() -> Model:
 
     # Load the VGG16 model
-    base_model = VGG16(weights='imagenet', include_top=False, input_shape=(224, 224, 3))
+    base_model = VGG16(weights="imagenet", include_top=False, input_shape=(224, 224, 3))
+
+    # First: train only the top layers (which were randomly initialized)
+    for layer in base_model.layers:
+        layer.trainable = False
 
     # Add a global spatial average pooling layer
     x = base_model.output
     x = GlobalAveragePooling2D()(x)
 
     # Add a fully-connected layer with fewer neurons
-    x = Dense(512, activation='relu')(x)  # Reduced from 1024 to 512
+    x = Dense(512, activation="relu")(x)  # Reduced from 1024 to 512
 
     # Add a logistic layer with the number of classes you have (let's say 10)
-    predictions = Dense(10, activation='softmax')(x)
+    predictions = Dense(10, activation="softmax")(x)
 
     # This is the model we will train
     model = Model(inputs=base_model.input, outputs=predictions)
+
+    # Compile the model
+    model.compile(optimizer="rmsprop", loss="categorical_crossentropy")
+    return model
+
+
+def build_model_imagenet_less_2() -> Model:
+
+    # Load the VGG16 model
+    base_model = VGG16(weights="imagenet", include_top=False, input_shape=(224, 224, 3))
 
     # First: train only the top layers (which were randomly initialized)
     for layer in base_model.layers:
         layer.trainable = False
 
+    # Add a global spatial average pooling layer
+    x = base_model.output
+    x = GlobalAveragePooling2D()(x)
+
+    # Add a fully-connected layer with fewer neurons
+    x = Dense(256, activation="relu")(x)  # Reduced from 1024 to 512
+
+    # Add a logistic layer with the number of classes you have (let's say 10)
+    predictions = Dense(10, activation="softmax")(x)
+
+    # This is the model we will train
+    model = Model(inputs=base_model.input, outputs=predictions)
+
     # Compile the model
-    model.compile(optimizer='rmsprop', loss='categorical_crossentropy')
+    model.compile(optimizer="rmsprop", loss="categorical_crossentropy")
     return model
+
+
+def build_model_imagenet_less_3() -> Model:
+
+    # Load the VGG16 model
+    base_model = VGG16(weights="imagenet", include_top=False, input_shape=(224, 224, 3))
+
+    # First: train only the top layers (which were randomly initialized)
+    for layer in base_model.layers:
+        layer.trainable = False
+
+    # Add a global spatial average pooling layer
+    x = base_model.output
+    x = GlobalAveragePooling2D()(x)
+
+    # Add a fully-connected layer with fewer neurons
+    x = Dense(128, activation="relu")(x)  # Reduced from 1024 to 512
+
+    # Add a logistic layer with the number of classes you have (let's say 10)
+    predictions = Dense(10, activation="softmax")(x)
+
+    # This is the model we will train
+    model = Model(inputs=base_model.input, outputs=predictions)
+
+    # Compile the model
+    model.compile(optimizer="rmsprop", loss="categorical_crossentropy")
+    return model
+
 
 # Total params: 113665 (444.00 KB)
 # Trainable params: 113409 (443.00 KB)
@@ -195,6 +254,7 @@ m.summary()
 m = build_autoencoder()
 m.summary()
 
+<<<<<<< HEAD
 #m = build_autoencoder2()
 #m.summary()
 
@@ -203,3 +263,16 @@ m.summary()
 # Non-trainable params: 14714688 (56.13 MB)
 m = build_model_imagenet_less()
 m.summary()
+||||||| parent of 4d953aa (Add model with less parameters)
+#m = build_autoencoder2()
+#m.summary()
+=======
+# m = build_autoencoder2()
+# m.summary()
+
+# Total params: 14982474 (57.15 MB)
+# Trainable params: 267786 (1.02 MB)
+# Non-trainable params: 14714688 (56.13 MB)
+m = build_model_imagenet_less()
+m.summary()
+>>>>>>> 4d953aa (Add model with less parameters)
