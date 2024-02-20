@@ -38,7 +38,7 @@ IMAGE_DIMENSION = 224
 
 
 def build_model() -> Model:
-    input_layer = Input(shape=(IMAGE_DIMENSION, IMAGE_DIMENSION, 1))
+    input_layer = Input(shape=(IMAGE_DIMENSION, IMAGE_DIMENSION, 3))
 
     # encoder
     h = Conv2D(64, (3, 3), padding="same")(input_layer)
@@ -64,47 +64,22 @@ def build_model() -> Model:
 
 
 def build_autoencoder() -> Model:
-    input_img = Input(shape=(IMAGE_DIMENSION, IMAGE_DIMENSION, 1), name="image_input")
+    input_img = Input(shape=(IMAGE_DIMENSION, IMAGE_DIMENSION, 3), name="image_input")
 
     # Encoder
-    x = Conv2D(32, (3, 3), activation="relu", padding="same", name="Conv1")(input_img)
+    x = Conv2D(64, (3, 3), activation="relu", padding="same", name="ConvEnc1")(
+        input_img
+    )
     x = MaxPooling2D((2, 2), padding="same", name="pool1")(x)
-    x = Conv2D(64, (3, 3), activation="relu", padding="same", name="Conv2")(x)
+    x = Conv2D(128, (3, 3), activation="relu", padding="same", name="ConvEnc2")(x)
     x = MaxPooling2D((2, 2), padding="same", name="pool2")(x)
 
     # Decoder
-    x = Conv2D(64, (3, 3), activation="relu", padding="same", name="Conv3")(x)
+    x = Conv2D(128, (3, 3), activation="relu", padding="same", name="ConvDec1")(x)
     x = UpSampling2D((2, 2), name="upsample1")(x)
-    x = Conv2D(32, (3, 3), activation="relu", padding="same", name="Conv4")(x)
+    x = Conv2D(64, (3, 3), activation="relu", padding="same", name="ConvDec2")(x)
     x = UpSampling2D((2, 2), name="upsample2")(x)
-    x = Conv2D(1, (3, 3), activation="sigmoid", padding="same", name="Conv5")(x)
-
-    # Model
-    autoencoder = Model(inputs=input_img, outputs=x)
-    autoencoder.compile(optimizer="adam", loss="binary_crossentropy")
-
-    return autoencoder
-
-
-def build_autoencoder_my() -> Model:
-    input_img = Input(shape=(IMAGE_DIMENSION, IMAGE_DIMENSION, 1), name="image_input")
-
-    # Encoder
-    x = Conv2D(16, (3, 3), activation="relu", padding="same", name="Enc1")(input_img)
-    x = MaxPooling2D((2, 2), padding="same", name="pool1")(x)
-    x = Conv2D(16, (3, 3), activation="relu", padding="same", name="Enc2")(x)
-    x = MaxPooling2D((2, 2), padding="same", name="pool2")(x)
-    x = Conv2D(16, (3, 3), activation="relu", padding="same", name="Enc3")(x)
-    x = MaxPooling2D((2, 2), padding="same", name="pool3")(x)
-
-    # Decoder
-    x = Conv2D(16, (3, 3), activation="relu", padding="same", name="Dec1")(x)
-    x = UpSampling2D((2, 2), name="upsample1")(x)
-    x = Conv2D(16, (3, 3), activation="relu", padding="same", name="Dec2")(x)
-    x = UpSampling2D((2, 2), name="upsample2")(x)
-    x = Conv2D(16, (3, 3), activation="relu", padding="same", name="Dec3")(x)
-    x = UpSampling2D((2, 2), name="upsample3")(x)
-    x = Conv2D(1, (3, 3), activation="sigmoid", padding="same", name="D3c4")(x)
+    x = Conv2D(3, (3, 3), activation="sigmoid", padding="same", name="ConvDec3")(x)
 
     # Model
     autoencoder = Model(inputs=input_img, outputs=x)
@@ -208,12 +183,11 @@ def data_augmentation():
 
 
 def load_image(path):
-    image_list = np.zeros((len(path), IMAGE_DIMENSION, IMAGE_DIMENSION, 1))
+    image_list = np.zeros((len(path), IMAGE_DIMENSION, IMAGE_DIMENSION, 3))
     for i, fig in enumerate(path):
         img = image.load_img(
             fig,
-            color_mode="grayscale",
-            target_size=(IMAGE_DIMENSION, IMAGE_DIMENSION, 1),
+            target_size=(IMAGE_DIMENSION, IMAGE_DIMENSION, 3),
         )
         x = image.img_to_array(img).astype("float32")
         image_list[i] = x
@@ -291,9 +265,10 @@ def apply(model, name, path):
     margin = 0
 
     image = cv2.imread(path)
-    # to YUV
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2YUV)
-    print(np.min(image[:, :, 0]), np.max(image[:, :, 0]))
+
+    #img = load_img(        path    )
+    #image = img_to_array(img).astype("float32")
+
 
     # split the image into regular IMAGE_DIMENSIONxIMAGE_DIMENSION images
     nb_x = math.ceil(image.shape[0] / (IMAGE_DIMENSION - 2 * margin))
@@ -304,7 +279,7 @@ def apply(model, name, path):
         for y in range(nb_y):
             x0 = round(x * slide_x)
             y0 = round(y * slide_y)
-            cropped = image[x0 : x0 + IMAGE_DIMENSION, y0 : y0 + IMAGE_DIMENSION, 0]
+            cropped = image[x0 : x0 + IMAGE_DIMENSION, y0 : y0 + IMAGE_DIMENSION, :]
 
             sample_test_img = cropped.astype("float32") / 255.0
             sample_test_img = np.expand_dims(cropped, axis=0)
@@ -329,8 +304,7 @@ def apply(model, name, path):
                 IMAGE_DIMENSION if y == nb_y - 1 else IMAGE_DIMENSION - margin
             )
 
-            print(min_x, max_x)
-            image[min_x:max_x, min_y:max_y, 0] = (
+            image[min_x:max_x, min_y:max_y, :] = (
                 predicted_label[
                     predict_min_x:predict_max_x, predict_min_y:predict_max_y
                 ]
@@ -339,13 +313,13 @@ def apply(model, name, path):
             data = np.zeros(
                 (predicted_label.shape[0], predicted_label.shape[1], 1), dtype=np.uint8
             )
-            data[:, :, 0] = predicted_label
+            data = predicted_label
             # save_img(f"{name}-{x}-{y}-gray-{os.path.basename(path)}", data)
-    print(np.min(image[:, :, 0]), np.max(image[:, :, 0]))
     # to BGR
-    image = cv2.cvtColor(image, cv2.COLOR_YUV2BGR)
+    #image = cv2.cvtColor(image, cv2.COLOR_YUV2BGR)
     # Save the image
     cv2.imwrite(f"{name}-{os.path.basename(path)}", image)
+    #save_img(f"{name}-{os.path.basename(path)}", image)
 
 
 MODELS = ()
