@@ -1,19 +1,19 @@
 # Currently only build_autoencoder gives acceptable results
 #
 # TODO:
-# - Fix image end in data augmentation?
-# - Add more data augmentation (fliplr, flip)
 # - Use bigger images (224 => 2000)
 # - Try in color
 
 
+from matplotlib import scale
 from keras.applications.vgg16 import VGG16
 from keras.models import Model
 from keras.layers import Dense, GlobalAveragePooling2D
 import keras.saving
 from keras_preprocessing.image import save_img
 import glob
-
+import random
+import shutil
 import numpy as np  # linear algebra
 import pandas as pd  # data processing, CSV file I/O (e.g. pd.read_csv)
 
@@ -121,20 +121,28 @@ def build_autoencoder_my() -> Model:
 
 
 def data_augmentation():
+    shutil.rmtree("augmented_data", ignore_errors=True)
+
     for category in ("train-x", "train-y"):
-        images = glob.glob(os.path.join("data", category, "*.png"))
+        images = glob.glob(os.path.join("data", category, "sbr*.png"))
         for image_filename in images:
             image = cv2.imread(image_filename)
 
             # split the image into regular 224x224 images
             nb_x = math.ceil(image.shape[0] / 224)
             nb_y = math.ceil(image.shape[1] / 224)
-            slide_x = 224 - (224 * nb_x - image.shape[0]) / nb_x
-            slide_y = 224 - (224 * nb_y - image.shape[1]) / nb_y
+            slide_x = (image.shape[0] - 224) / (nb_x - 1)
+            slide_y = (image.shape[1] - 224) / (nb_y - 1)
             for x in range(nb_x):
                 for y in range(nb_y):
                     x0 = round(x * slide_x)
                     y0 = round(y * slide_y)
+                    if x0 + 224 > image.shape[0]:
+                        print(nb_x, x, slide_x)
+                        print(image.shape, x0+224, y0+224)
+                    if y0 + 224 > image.shape[1]:
+                        print(nb_y, y, slide_y)
+                        print(image.shape, x0+224, y0+224)
                     cropped = image[x0 : x0 + 224, y0 : y0 + 224]
 
                     dest_folder = os.path.join("augmented_data", category)
@@ -154,6 +162,28 @@ def data_augmentation():
                             f"rotated-{x}-{y}-{os.path.basename(image_filename)}",
                         ),
                         ndimage.rotate(cropped, 180),
+                    )
+                    cv2.imwrite(
+                        os.path.join(
+                            dest_folder,
+                            f"fliplr-{x}-{y}-{os.path.basename(image_filename)}",
+                        ),
+                        np.fliplr(cropped),
+                    )
+                    cv2.imwrite(
+                        os.path.join(
+                            dest_folder,
+                            f"flipud-{x}-{y}-{os.path.basename(image_filename)}",
+                        ),
+                        np.flip(cropped),
+                    )
+                    scale = random.uniform(0.5, 0.9)
+                    cv2.imwrite(
+                        os.path.join(
+                            dest_folder,
+                            f"zoom-{x}-{y}-{os.path.basename(image_filename)}",
+                        ),
+                        cv2.resize(cropped, (0, 0), fx=scale, fy=scale),
                     )
 
 
@@ -292,4 +322,5 @@ def train():
             raise e
 
 
+#data_augmentation()
 train()
