@@ -1,7 +1,7 @@
 # Currently only build_autoencoder gives acceptable results
+# No good results with bigger images
 #
 # TODO:
-# - Use bigger images (224 => 2000)
 # - Try in color
 
 
@@ -43,9 +43,10 @@ from scipy import ndimage
 from keras.preprocessing import image
 from keras.applications.vgg16 import VGG16
 
+IMAGE_DIMENSION = 224
 
 def build_model() -> Model:
-    input_layer = Input(shape=(224, 224, 1))
+    input_layer = Input(shape=(IMAGE_DIMENSION, IMAGE_DIMENSION, 1))
 
     # encoder
     h = Conv2D(64, (3, 3), padding="same")(input_layer)
@@ -71,7 +72,7 @@ def build_model() -> Model:
 
 
 def build_autoencoder() -> Model:
-    input_img = Input(shape=(224, 224, 1), name="image_input")
+    input_img = Input(shape=(IMAGE_DIMENSION, IMAGE_DIMENSION, 1), name="image_input")
 
     # Encoder
     x = Conv2D(32, (3, 3), activation="relu", padding="same", name="Conv1")(input_img)
@@ -94,7 +95,7 @@ def build_autoencoder() -> Model:
 
 
 def build_autoencoder_my() -> Model:
-    input_img = Input(shape=(224, 224, 1), name="image_input")
+    input_img = Input(shape=(IMAGE_DIMENSION, IMAGE_DIMENSION, 1), name="image_input")
 
     # Encoder
     x = Conv2D(16, (3, 3), activation="relu", padding="same", name="Enc1")(input_img)
@@ -128,23 +129,26 @@ def data_augmentation():
         for image_filename in images:
             image = cv2.imread(image_filename)
 
-            # split the image into regular 224x224 images
-            nb_x = math.ceil(image.shape[0] / 224)
-            nb_y = math.ceil(image.shape[1] / 224)
-            slide_x = (image.shape[0] - 224) / (nb_x - 1)
-            slide_y = (image.shape[1] - 224) / (nb_y - 1)
+            # split the image into regular IMAGE_DIMENSIONxIMAGE_DIMENSION images
+            nb_x = math.ceil(image.shape[0] / IMAGE_DIMENSION)
+            nb_y = math.ceil(image.shape[1] / IMAGE_DIMENSION)
+            slide_x = (image.shape[0] - IMAGE_DIMENSION) / (nb_x - 1)
+            slide_y = (image.shape[1] - IMAGE_DIMENSION) / (nb_y - 1)
             for x in range(nb_x):
                 for y in range(nb_y):
                     x0 = round(x * slide_x)
                     y0 = round(y * slide_y)
-                    if x0 + 224 > image.shape[0]:
+                    if x0 + IMAGE_DIMENSION > image.shape[0]:
                         print(nb_x, x, slide_x)
-                        print(image.shape, x0+224, y0+224)
-                    if y0 + 224 > image.shape[1]:
+                        print(image.shape, x0+IMAGE_DIMENSION, y0+IMAGE_DIMENSION)
+                    if y0 + IMAGE_DIMENSION > image.shape[1]:
                         print(nb_y, y, slide_y)
-                        print(image.shape, x0+224, y0+224)
-                    cropped = image[x0 : x0 + 224, y0 : y0 + 224]
+                        print(image.shape, x0+IMAGE_DIMENSION, y0+IMAGE_DIMENSION)
+                    cropped = image[x0 : x0 + IMAGE_DIMENSION, y0 : y0 + IMAGE_DIMENSION]
 
+                    base = f'-{x}-{y}-'
+                    #base = '-'
+                    #cropped = image
                     dest_folder = os.path.join("augmented_data", category)
                     if not os.path.exists(dest_folder):
                         os.makedirs(dest_folder)
@@ -152,45 +156,65 @@ def data_augmentation():
                     cv2.imwrite(
                         os.path.join(
                             dest_folder,
-                            f"cropped-{x}-{y}-{os.path.basename(image_filename)}",
+                            f"base{base}{os.path.basename(image_filename)}",
                         ),
                         cropped,
                     )
                     cv2.imwrite(
                         os.path.join(
                             dest_folder,
-                            f"rotated-{x}-{y}-{os.path.basename(image_filename)}",
+                            f"rotated{base}{os.path.basename(image_filename)}",
                         ),
                         ndimage.rotate(cropped, 180),
                     )
                     cv2.imwrite(
                         os.path.join(
                             dest_folder,
-                            f"fliplr-{x}-{y}-{os.path.basename(image_filename)}",
+                            f"fliplr{base}{os.path.basename(image_filename)}",
                         ),
                         np.fliplr(cropped),
                     )
                     cv2.imwrite(
                         os.path.join(
                             dest_folder,
-                            f"flipud-{x}-{y}-{os.path.basename(image_filename)}",
+                            f"flipud{base}{os.path.basename(image_filename)}",
                         ),
                         np.flip(cropped),
                     )
-                    scale = random.uniform(0.5, 0.9)
+
+            # scale = random.uniform(0.8, 0.9)
+            scale = 0.8
+            image = cv2.resize(image, (0, 0), fx=scale, fy=scale)
+            nb_x = math.ceil(image.shape[0] / IMAGE_DIMENSION)
+            nb_y = math.ceil(image.shape[1] / IMAGE_DIMENSION)
+            slide_x = (image.shape[0] - IMAGE_DIMENSION) / (nb_x - 1)
+            slide_y = (image.shape[1] - IMAGE_DIMENSION) / (nb_y - 1)
+            for x in range(nb_x):
+                for y in range(nb_y):
+                    x0 = round(x * slide_x)
+                    y0 = round(y * slide_y)
+                    if x0 + IMAGE_DIMENSION > image.shape[0]:
+                        print(nb_x, x, slide_x)
+                        print(image.shape, x0+IMAGE_DIMENSION, y0+IMAGE_DIMENSION)
+                    if y0 + IMAGE_DIMENSION > image.shape[1]:
+                        print(nb_y, y, slide_y)
+                        print(image.shape, x0+IMAGE_DIMENSION, y0+IMAGE_DIMENSION)
+                    cropped = image[x0 : x0 + IMAGE_DIMENSION, y0 : y0 + IMAGE_DIMENSION]
+
+                    base = f'-{x}-{y}-'
                     cv2.imwrite(
                         os.path.join(
                             dest_folder,
-                            f"zoom-{x}-{y}-{os.path.basename(image_filename)}",
+                            f"zoom{base}{os.path.basename(image_filename)}",
                         ),
                         cv2.resize(cropped, (0, 0), fx=scale, fy=scale),
                     )
 
 
 def load_image(path):
-    image_list = np.zeros((len(path), 224, 224, 1))
+    image_list = np.zeros((len(path), IMAGE_DIMENSION, IMAGE_DIMENSION, 1))
     for i, fig in enumerate(path):
-        img = image.load_img(fig, color_mode="grayscale", target_size=(224, 224, 1))
+        img = image.load_img(fig, color_mode="grayscale", target_size=(IMAGE_DIMENSION, IMAGE_DIMENSION, 1))
         x = image.img_to_array(img).astype("float32")
         image_list[i] = x
 
@@ -230,42 +254,12 @@ def train_model(name, model, x_train, y_train, x_val, y_val, epochs, batch_size=
     plt.savefig(f"{name}.png")
 
 
-def apply(model, name, path):
+
+def apply_simple(model, name, path):
     print(path)
-    sample_test = img_to_array(load_img(path))
-    print(sample_test.shape)
-
-    # Convert the image to yuv
-    sample_test = cv2.cvtColor(sample_test, cv2.COLOR_BGR2YUV)
-    print(sample_test.shape)
-    # Get Y channel
-    sample_test2 = sample_test[:, :, 0]
-    print(sample_test2.shape)
-    # sample_test2 = img_to_array(sample_test2)
-    print(sample_test2.shape)
-
-    sample_test_img = sample_test.astype("float32") / 255.0
-    sample_test_img = np.expand_dims(sample_test, axis=0)
-    print(sample_test_img.shape)
-
-    # Get the prediction
-    predicted_label = np.squeeze(model.predict(sample_test_img))
-    sample_test[:, :, 0] = predicted_label
-    data = cv2.cvtColor(sample_test, cv2.COLOR_YUV2BGR)
-    save_img(f"{name}-{os.path.basename(path)}", data)
-
-    data = np.zeros(
-        (predicted_label.shape[0], predicted_label.shape[1], 1), dtype=np.uint8
-    )
-    data[:, :, 0] = predicted_label
-    save_img(f"{name}-gray-{os.path.basename(path)}", data)
-
-
-def apply2(model, name, path):
-    print(path)
-    sample_test = load_img(path, color_mode="grayscale", target_size=(224, 224))
+    sample_test = load_img(path, color_mode="grayscale", target_size=(IMAGE_DIMENSION, IMAGE_DIMENSION))
     sample_test = load_img(path, color_mode="grayscale")
-    # sample_test = load_img(path, target_size=(224, 224))
+    # sample_test = load_img(path, target_size=(IMAGE_DIMENSION, IMAGE_DIMENSION))
     sample_test = img_to_array(sample_test)
     print(sample_test.shape)
     print(np.min(sample_test), np.max(sample_test))
@@ -285,6 +279,61 @@ def apply2(model, name, path):
     data[:, :, 0] = predicted_label
     save_img(f"{name}-gray-{os.path.basename(path)}", data)
 
+def apply(model, name, path):
+    print(path)
+    #sample_test = load_img(path, color_mode="grayscale", target_size=(IMAGE_DIMENSION, IMAGE_DIMENSION))
+    #sample_test = load_img(path, color_mode="grayscale")
+    # sample_test = load_img(path, target_size=(IMAGE_DIMENSION, IMAGE_DIMENSION))
+    #sample_test = img_to_array(sample_test)
+    margin = 5
+    margin = 0
+
+    image = cv2.imread(path)
+    # to YUV
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2YUV)
+    print(np.min(image[:, :,0]), np.max(image[:, :,0]))
+
+    # split the image into regular IMAGE_DIMENSIONxIMAGE_DIMENSION images
+    nb_x = math.ceil(image.shape[0] / (IMAGE_DIMENSION - 2*margin))
+    nb_y = math.ceil(image.shape[1] / (IMAGE_DIMENSION - 2*margin))
+    slide_x = (image.shape[0] - IMAGE_DIMENSION) / (nb_x - 1)
+    slide_y = (image.shape[1] - IMAGE_DIMENSION) / (nb_y - 1)
+    for x in range(nb_x):
+        for y in range(nb_y):
+            x0 = round(x * slide_x)
+            y0 = round(y * slide_y)
+            cropped = image[x0 : x0 + IMAGE_DIMENSION, y0 : y0 + IMAGE_DIMENSION, 0]
+
+            sample_test_img = cropped.astype("float32") / 255.0
+            sample_test_img = np.expand_dims(cropped, axis=0)
+
+            # Get the prediction
+            predicted_label = np.squeeze(model.predict(sample_test_img))
+            # Update image with the prediction
+            min_x = 0 if x == 0 else x0 + margin
+            min_y = 0 if y == 0 else y0 + margin
+            max_x = x0 + IMAGE_DIMENSION if x == nb_x - 1 else x0 + IMAGE_DIMENSION - margin
+            max_y = y0 + IMAGE_DIMENSION if y == nb_y - 1 else y0 + IMAGE_DIMENSION - margin
+            predict_min_x = 0 if x == 0 else margin
+            predict_min_y = 0 if y == 0 else margin
+            predict_max_x = IMAGE_DIMENSION if x == nb_x - 1 else IMAGE_DIMENSION - margin
+            predict_max_y = IMAGE_DIMENSION if y == nb_y - 1 else IMAGE_DIMENSION - margin
+
+
+            print(min_x, max_x)
+            image[min_x : max_x, min_y : max_y, 0] = predicted_label[predict_min_x:predict_max_x, predict_min_y:predict_max_y] * 255.0
+            data = np.zeros(
+                (predicted_label.shape[0], predicted_label.shape[1], 1), dtype=np.uint8
+            )
+            data[:, :, 0] = predicted_label
+            #save_img(f"{name}-{x}-{y}-gray-{os.path.basename(path)}", data)
+    print(np.min(image[:, :,0]), np.max(image[:, :,0]))
+    # to BGR
+    image = cv2.cvtColor(image, cv2.COLOR_YUV2BGR)
+    # Save the image
+    cv2.imwrite(f"{name}-{os.path.basename(path)}", image)
+
+MODELS = ()
 
 def train():
     TRAIN_IMAGES = glob.glob("augmented_data/train-x/*.png")
@@ -296,24 +345,14 @@ def train():
 
     x_train, y_train, x_val, y_val = train_val_split(x_train, y_train)
     print(x_train.shape, y_train.shape, x_val.shape, y_val.shape)
-    for name, model in (
-        ("model", build_model()),
-        # ("autoencoder", build_autoencoder()),
-        #("autoencoder_my", build_autoencoder_my()),
-    ):
+    for name, model in MODELS:
         model.summary()
         try:
-            # train_model(
-            #    name, model, x_train, y_train, x_val, y_val, epochs=20, batch_size=20
-            # )
+            train_model(
+               name, model, x_train, y_train, x_val, y_val, epochs=20, batch_size=20
+            )
             # Save the model
-            # model.save(f"{name}.keras", overwrite=True)
-            # Load model
-            model = keras.saving.load_model(f"{name}.keras")
-            model.summary()
-            images = glob.glob("data/train-x/*.png")
-            for image_path in images:
-                apply2(model, name, image_path)
+            model.save(f"{name}.keras", overwrite=True)
         except Exception as e:
             print(f"Failed to train model {name}: {e}")
             import traceback
@@ -321,6 +360,36 @@ def train():
             print(traceback.format_exc())
             raise e
 
+def do_apply():
+    for name, model in MODELS:
+        try:
+            # Load model
+            model = keras.saving.load_model(f"{name}.keras")
+            model.summary()
+            images = glob.glob("data/train-x/*.png")
+            for image_path in images:
+                apply(model, name, image_path)
+        except Exception as e:
+            print(f"Failed to apply model {name}: {e}")
+            import traceback
 
+            print(traceback.format_exc())
+            raise e
+
+import pikepdf
+def list_pdf_images(path:str):
+    with pikepdf.open(path) as pdf:
+        for i, page in enumerate(pdf.pages):
+            for image in page.images.values():
+                pdfimage = pikepdf.PdfImage(image)
+                print(pdfimage.width, pdfimage.height)
+
+MODELS = (
+        #("model", build_model()),
+         ("autoencoder", build_autoencoder()),
+        #("autoencoder_my", build_autoencoder_my()),
+    )
+#list_pdf_images('/tmp/test.pdf')
 #data_augmentation()
-train()
+#train()
+do_apply()
