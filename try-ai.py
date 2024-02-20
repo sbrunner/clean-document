@@ -5,45 +5,37 @@
 # - Try in color
 
 
-from matplotlib import scale
-from keras.applications.vgg16 import VGG16
 from keras.models import Model
-from keras.layers import Dense, GlobalAveragePooling2D
 import keras.saving
 from keras_preprocessing.image import save_img
 import glob
-import random
 import shutil
-import numpy as np  # linear algebra
-import pandas as pd  # data processing, CSV file I/O (e.g. pd.read_csv)
+import numpy as np
 
 import os.path
 import math
-import sys
 
 import keras.saving
 import matplotlib.pyplot as plt
-from keras_preprocessing.image import load_img, array_to_img, img_to_array
+from keras_preprocessing.image import load_img, img_to_array
 
-# from keras.popencv-pythonopencv-pythonopencv-pythonreprocessing.image import load_img, array_to_img, img_to_array
-from keras.models import Sequential, Model
-from keras.layers import Dense, Conv2D, MaxPooling2D, UpSampling2D, Flatten, Input
-from keras.optimizers import SGD, Adam, Adadelta, Adagrad
+from keras.models import Model
+from keras.layers import Conv2D, MaxPooling2D, UpSampling2D, Input
+from keras.optimizers import Adam
 from keras import backend as K
-from sklearn.model_selection import train_test_split
 
 from keras.models import Model
 from keras.optimizers import Adam
-from keras.layers import Input, Dense, Activation, BatchNormalization, Conv2D, LeakyReLU
-from keras.layers import MaxPooling2D, Dropout, UpSampling2D
+from keras.layers import Input, BatchNormalization, Conv2D, LeakyReLU
+from keras.layers import MaxPooling2D, UpSampling2D
 import cv2
 import glob
 import numpy as np
 from scipy import ndimage
 from keras.preprocessing import image
-from keras.applications.vgg16 import VGG16
 
 IMAGE_DIMENSION = 224
+
 
 def build_model() -> Model:
     input_layer = Input(shape=(IMAGE_DIMENSION, IMAGE_DIMENSION, 1))
@@ -140,15 +132,17 @@ def data_augmentation():
                     y0 = round(y * slide_y)
                     if x0 + IMAGE_DIMENSION > image.shape[0]:
                         print(nb_x, x, slide_x)
-                        print(image.shape, x0+IMAGE_DIMENSION, y0+IMAGE_DIMENSION)
+                        print(image.shape, x0 + IMAGE_DIMENSION, y0 + IMAGE_DIMENSION)
                     if y0 + IMAGE_DIMENSION > image.shape[1]:
                         print(nb_y, y, slide_y)
-                        print(image.shape, x0+IMAGE_DIMENSION, y0+IMAGE_DIMENSION)
-                    cropped = image[x0 : x0 + IMAGE_DIMENSION, y0 : y0 + IMAGE_DIMENSION]
+                        print(image.shape, x0 + IMAGE_DIMENSION, y0 + IMAGE_DIMENSION)
+                    cropped = image[
+                        x0 : x0 + IMAGE_DIMENSION, y0 : y0 + IMAGE_DIMENSION
+                    ]
 
-                    base = f'-{x}-{y}-'
-                    #base = '-'
-                    #cropped = image
+                    base = f"-{x}-{y}-"
+                    # base = '-'
+                    # cropped = image
                     dest_folder = os.path.join("augmented_data", category)
                     if not os.path.exists(dest_folder):
                         os.makedirs(dest_folder)
@@ -195,13 +189,15 @@ def data_augmentation():
                     y0 = round(y * slide_y)
                     if x0 + IMAGE_DIMENSION > image.shape[0]:
                         print(nb_x, x, slide_x)
-                        print(image.shape, x0+IMAGE_DIMENSION, y0+IMAGE_DIMENSION)
+                        print(image.shape, x0 + IMAGE_DIMENSION, y0 + IMAGE_DIMENSION)
                     if y0 + IMAGE_DIMENSION > image.shape[1]:
                         print(nb_y, y, slide_y)
-                        print(image.shape, x0+IMAGE_DIMENSION, y0+IMAGE_DIMENSION)
-                    cropped = image[x0 : x0 + IMAGE_DIMENSION, y0 : y0 + IMAGE_DIMENSION]
+                        print(image.shape, x0 + IMAGE_DIMENSION, y0 + IMAGE_DIMENSION)
+                    cropped = image[
+                        x0 : x0 + IMAGE_DIMENSION, y0 : y0 + IMAGE_DIMENSION
+                    ]
 
-                    base = f'-{x}-{y}-'
+                    base = f"-{x}-{y}-"
                     cv2.imwrite(
                         os.path.join(
                             dest_folder,
@@ -214,7 +210,11 @@ def data_augmentation():
 def load_image(path):
     image_list = np.zeros((len(path), IMAGE_DIMENSION, IMAGE_DIMENSION, 1))
     for i, fig in enumerate(path):
-        img = image.load_img(fig, color_mode="grayscale", target_size=(IMAGE_DIMENSION, IMAGE_DIMENSION, 1))
+        img = image.load_img(
+            fig,
+            color_mode="grayscale",
+            target_size=(IMAGE_DIMENSION, IMAGE_DIMENSION, 1),
+        )
         x = image.img_to_array(img).astype("float32")
         image_list[i] = x
 
@@ -254,10 +254,11 @@ def train_model(name, model, x_train, y_train, x_val, y_val, epochs, batch_size=
     plt.savefig(f"{name}.png")
 
 
-
 def apply_simple(model, name, path):
     print(path)
-    sample_test = load_img(path, color_mode="grayscale", target_size=(IMAGE_DIMENSION, IMAGE_DIMENSION))
+    sample_test = load_img(
+        path, color_mode="grayscale", target_size=(IMAGE_DIMENSION, IMAGE_DIMENSION)
+    )
     sample_test = load_img(path, color_mode="grayscale")
     # sample_test = load_img(path, target_size=(IMAGE_DIMENSION, IMAGE_DIMENSION))
     sample_test = img_to_array(sample_test)
@@ -279,23 +280,24 @@ def apply_simple(model, name, path):
     data[:, :, 0] = predicted_label
     save_img(f"{name}-gray-{os.path.basename(path)}", data)
 
+
 def apply(model, name, path):
     print(path)
-    #sample_test = load_img(path, color_mode="grayscale", target_size=(IMAGE_DIMENSION, IMAGE_DIMENSION))
-    #sample_test = load_img(path, color_mode="grayscale")
+    # sample_test = load_img(path, color_mode="grayscale", target_size=(IMAGE_DIMENSION, IMAGE_DIMENSION))
+    # sample_test = load_img(path, color_mode="grayscale")
     # sample_test = load_img(path, target_size=(IMAGE_DIMENSION, IMAGE_DIMENSION))
-    #sample_test = img_to_array(sample_test)
+    # sample_test = img_to_array(sample_test)
     margin = 5
     margin = 0
 
     image = cv2.imread(path)
     # to YUV
     image = cv2.cvtColor(image, cv2.COLOR_BGR2YUV)
-    print(np.min(image[:, :,0]), np.max(image[:, :,0]))
+    print(np.min(image[:, :, 0]), np.max(image[:, :, 0]))
 
     # split the image into regular IMAGE_DIMENSIONxIMAGE_DIMENSION images
-    nb_x = math.ceil(image.shape[0] / (IMAGE_DIMENSION - 2*margin))
-    nb_y = math.ceil(image.shape[1] / (IMAGE_DIMENSION - 2*margin))
+    nb_x = math.ceil(image.shape[0] / (IMAGE_DIMENSION - 2 * margin))
+    nb_y = math.ceil(image.shape[1] / (IMAGE_DIMENSION - 2 * margin))
     slide_x = (image.shape[0] - IMAGE_DIMENSION) / (nb_x - 1)
     slide_y = (image.shape[1] - IMAGE_DIMENSION) / (nb_y - 1)
     for x in range(nb_x):
@@ -312,28 +314,42 @@ def apply(model, name, path):
             # Update image with the prediction
             min_x = 0 if x == 0 else x0 + margin
             min_y = 0 if y == 0 else y0 + margin
-            max_x = x0 + IMAGE_DIMENSION if x == nb_x - 1 else x0 + IMAGE_DIMENSION - margin
-            max_y = y0 + IMAGE_DIMENSION if y == nb_y - 1 else y0 + IMAGE_DIMENSION - margin
+            max_x = (
+                x0 + IMAGE_DIMENSION if x == nb_x - 1 else x0 + IMAGE_DIMENSION - margin
+            )
+            max_y = (
+                y0 + IMAGE_DIMENSION if y == nb_y - 1 else y0 + IMAGE_DIMENSION - margin
+            )
             predict_min_x = 0 if x == 0 else margin
             predict_min_y = 0 if y == 0 else margin
-            predict_max_x = IMAGE_DIMENSION if x == nb_x - 1 else IMAGE_DIMENSION - margin
-            predict_max_y = IMAGE_DIMENSION if y == nb_y - 1 else IMAGE_DIMENSION - margin
-
+            predict_max_x = (
+                IMAGE_DIMENSION if x == nb_x - 1 else IMAGE_DIMENSION - margin
+            )
+            predict_max_y = (
+                IMAGE_DIMENSION if y == nb_y - 1 else IMAGE_DIMENSION - margin
+            )
 
             print(min_x, max_x)
-            image[min_x : max_x, min_y : max_y, 0] = predicted_label[predict_min_x:predict_max_x, predict_min_y:predict_max_y] * 255.0
+            image[min_x:max_x, min_y:max_y, 0] = (
+                predicted_label[
+                    predict_min_x:predict_max_x, predict_min_y:predict_max_y
+                ]
+                * 255.0
+            )
             data = np.zeros(
                 (predicted_label.shape[0], predicted_label.shape[1], 1), dtype=np.uint8
             )
             data[:, :, 0] = predicted_label
-            #save_img(f"{name}-{x}-{y}-gray-{os.path.basename(path)}", data)
-    print(np.min(image[:, :,0]), np.max(image[:, :,0]))
+            # save_img(f"{name}-{x}-{y}-gray-{os.path.basename(path)}", data)
+    print(np.min(image[:, :, 0]), np.max(image[:, :, 0]))
     # to BGR
     image = cv2.cvtColor(image, cv2.COLOR_YUV2BGR)
     # Save the image
     cv2.imwrite(f"{name}-{os.path.basename(path)}", image)
 
+
 MODELS = ()
+
 
 def train():
     TRAIN_IMAGES = glob.glob("augmented_data/train-x/*.png")
@@ -349,7 +365,7 @@ def train():
         model.summary()
         try:
             train_model(
-               name, model, x_train, y_train, x_val, y_val, epochs=20, batch_size=20
+                name, model, x_train, y_train, x_val, y_val, epochs=20, batch_size=20
             )
             # Save the model
             model.save(f"{name}.keras", overwrite=True)
@@ -359,6 +375,7 @@ def train():
 
             print(traceback.format_exc())
             raise e
+
 
 def do_apply():
     for name, model in MODELS:
@@ -376,20 +393,24 @@ def do_apply():
             print(traceback.format_exc())
             raise e
 
+
 import pikepdf
-def list_pdf_images(path:str):
+
+
+def list_pdf_images(path: str):
     with pikepdf.open(path) as pdf:
         for i, page in enumerate(pdf.pages):
             for image in page.images.values():
                 pdfimage = pikepdf.PdfImage(image)
                 print(pdfimage.width, pdfimage.height)
 
+
 MODELS = (
-        #("model", build_model()),
-         ("autoencoder", build_autoencoder()),
-        #("autoencoder_my", build_autoencoder_my()),
-    )
-#list_pdf_images('/tmp/test.pdf')
-#data_augmentation()
-#train()
+    # ("model", build_model()),
+    ("autoencoder", build_autoencoder()),
+    # ("autoencoder_my", build_autoencoder_my()),
+)
+# list_pdf_images('/tmp/test.pdf')
+# data_augmentation()
+# train()
 do_apply()
