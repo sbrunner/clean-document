@@ -1,8 +1,9 @@
+# Currently only build_autoencoder gives acceptable results
+#
 # TODO:
-# - Fix model
-# - Add more data augmentation (flip)
+# - Fix image end in data augmentation?
+# - Add more data augmentation (fliplr, flip)
 # - Use bigger images (224 => 2000)
-# - Fix image end in data augmentation
 # - Try in color
 
 
@@ -69,7 +70,6 @@ def build_model() -> Model:
     return m
 
 
-
 def build_autoencoder() -> Model:
     input_img = Input(shape=(224, 224, 1), name="image_input")
 
@@ -92,6 +92,32 @@ def build_autoencoder() -> Model:
 
     return autoencoder
 
+
+def build_autoencoder_my() -> Model:
+    input_img = Input(shape=(224, 224, 1), name="image_input")
+
+    # Encoder
+    x = Conv2D(16, (3, 3), activation="relu", padding="same", name="Enc1")(input_img)
+    x = MaxPooling2D((2, 2), padding="same", name="pool1")(x)
+    x = Conv2D(16, (3, 3), activation="relu", padding="same", name="Enc2")(x)
+    x = MaxPooling2D((2, 2), padding="same", name="pool2")(x)
+    x = Conv2D(16, (3, 3), activation="relu", padding="same", name="Enc3")(x)
+    x = MaxPooling2D((2, 2), padding="same", name="pool3")(x)
+
+    # Decoder
+    x = Conv2D(16, (3, 3), activation="relu", padding="same", name="Dec1")(x)
+    x = UpSampling2D((2, 2), name="upsample1")(x)
+    x = Conv2D(16, (3, 3), activation="relu", padding="same", name="Dec2")(x)
+    x = UpSampling2D((2, 2), name="upsample2")(x)
+    x = Conv2D(16, (3, 3), activation="relu", padding="same", name="Dec3")(x)
+    x = UpSampling2D((2, 2), name="upsample3")(x)
+    x = Conv2D(1, (3, 3), activation="sigmoid", padding="same", name="D3c4")(x)
+
+    # Model
+    autoencoder = Model(inputs=input_img, outputs=x)
+    autoencoder.compile(optimizer="adam", loss="binary_crossentropy")
+
+    return autoencoder
 
 
 def data_augmentation():
@@ -219,6 +245,8 @@ def apply2(model, name, path):
 
     # Get the prediction
     predicted_label = np.squeeze(model.predict(sample_test_img))
+    print("gggg")
+    print(name)
     print(np.min(predicted_label), np.max(predicted_label))
     print(predicted_label.shape)
     data = np.zeros(
@@ -239,22 +267,17 @@ def train():
     x_train, y_train, x_val, y_val = train_val_split(x_train, y_train)
     print(x_train.shape, y_train.shape, x_val.shape, y_val.shape)
     for name, model in (
-        # ("model", build_model()),
-        # ("model2", build_model2()),
-        ("autoencoder", build_autoencoder()),
-        # ("autoencoder2", build_autoencoder2()),
-        # ("model_imagenet", build_model_imagenet()),
-        # ("model_imagenet_less", build_model_imagenet_less()),
-        # ("model_imagenet_less_2", build_model_imagenet_less_2()),
-        # ("model_imagenet_less_3", build_model_imagenet_less_3()),
+        ("model", build_model()),
+        # ("autoencoder", build_autoencoder()),
+        #("autoencoder_my", build_autoencoder_my()),
     ):
         model.summary()
         try:
-            #train_model(
+            # train_model(
             #    name, model, x_train, y_train, x_val, y_val, epochs=20, batch_size=20
-            #)
+            # )
             # Save the model
-            #model.save(f"{name}.keras", overwrite=True)
+            # model.save(f"{name}.keras", overwrite=True)
             # Load model
             model = keras.saving.load_model(f"{name}.keras")
             model.summary()
