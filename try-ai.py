@@ -5,6 +5,7 @@
 # - Try in color
 
 
+import random
 from keras.models import Model
 import keras.saving
 from keras_preprocessing.image import save_img
@@ -34,7 +35,7 @@ import numpy as np
 from scipy import ndimage
 from keras.preprocessing import image
 
-IMAGE_DIMENSION = 224
+IMAGE_DIMENSION = 256
 
 
 def build_model() -> Model:
@@ -88,98 +89,127 @@ def build_autoencoder() -> Model:
     return autoencoder
 
 
-def data_augmentation():
+def data_augmentation_clean():
     shutil.rmtree("augmented_data", ignore_errors=True)
 
-    for category in ("train-x", "train-y"):
-        images = glob.glob(os.path.join("data", category, "sbr*.png"))
+    images = glob.glob(os.path.join("clean-data/*.png"))
+    for image_filename in images:
+        data_augmentation_image(image_filename, "train-xy")
+
+
+def data_augmentation(xy=False):
+    shutil.rmtree("augmented_data", ignore_errors=True)
+
+    for category in ("train-xy",) if xy else ("train-x", "train-y"):
+        images = (
+            glob.glob("clean-sata/*.png")
+            if xy
+            else glob.glob(os.path.join("data", category, "sbr*.png"))
+        )
         for image_filename in images:
-            image = cv2.imread(image_filename)
+            data_augmentation_image(image_filename, category)
 
-            # split the image into regular IMAGE_DIMENSIONxIMAGE_DIMENSION images
-            nb_x = math.ceil(image.shape[0] / IMAGE_DIMENSION)
-            nb_y = math.ceil(image.shape[1] / IMAGE_DIMENSION)
-            slide_x = (image.shape[0] - IMAGE_DIMENSION) / (nb_x - 1)
-            slide_y = (image.shape[1] - IMAGE_DIMENSION) / (nb_y - 1)
-            for x in range(nb_x):
-                for y in range(nb_y):
-                    x0 = round(x * slide_x)
-                    y0 = round(y * slide_y)
-                    if x0 + IMAGE_DIMENSION > image.shape[0]:
-                        print(nb_x, x, slide_x)
-                        print(image.shape, x0 + IMAGE_DIMENSION, y0 + IMAGE_DIMENSION)
-                    if y0 + IMAGE_DIMENSION > image.shape[1]:
-                        print(nb_y, y, slide_y)
-                        print(image.shape, x0 + IMAGE_DIMENSION, y0 + IMAGE_DIMENSION)
-                    cropped = image[
-                        x0 : x0 + IMAGE_DIMENSION, y0 : y0 + IMAGE_DIMENSION
-                    ]
 
-                    base = f"-{x}-{y}-"
-                    # base = '-'
-                    # cropped = image
-                    dest_folder = os.path.join("augmented_data", category)
-                    if not os.path.exists(dest_folder):
-                        os.makedirs(dest_folder)
+def data_augmentation_image(image_filename, category=None, save=True):
+    results = []
+    image = cv2.imread(image_filename)
+    # to yuv
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2YUV)
 
-                    cv2.imwrite(
-                        os.path.join(
-                            dest_folder,
-                            f"base{base}{os.path.basename(image_filename)}",
-                        ),
-                        cropped,
-                    )
-                    cv2.imwrite(
-                        os.path.join(
-                            dest_folder,
-                            f"rotated{base}{os.path.basename(image_filename)}",
-                        ),
-                        ndimage.rotate(cropped, 180),
-                    )
-                    cv2.imwrite(
-                        os.path.join(
-                            dest_folder,
-                            f"fliplr{base}{os.path.basename(image_filename)}",
-                        ),
-                        np.fliplr(cropped),
-                    )
-                    cv2.imwrite(
-                        os.path.join(
-                            dest_folder,
-                            f"flipud{base}{os.path.basename(image_filename)}",
-                        ),
-                        np.flip(cropped),
-                    )
+    # split the image into regular IMAGE_DIMENSIONxIMAGE_DIMENSION images
+    nb_x = math.ceil(image.shape[0] / IMAGE_DIMENSION)
+    nb_y = math.ceil(image.shape[1] / IMAGE_DIMENSION)
+    slide_x = (image.shape[0] - IMAGE_DIMENSION) / (nb_x - 1)
+    slide_y = (image.shape[1] - IMAGE_DIMENSION) / (nb_y - 1)
+    for x in range(nb_x):
+        for y in range(nb_y):
+            x0 = round(x * slide_x)
+            y0 = round(y * slide_y)
+            if x0 + IMAGE_DIMENSION > image.shape[0]:
+                print(nb_x, x, slide_x)
+                print(image.shape, x0 + IMAGE_DIMENSION, y0 + IMAGE_DIMENSION)
+            if y0 + IMAGE_DIMENSION > image.shape[1]:
+                print(nb_y, y, slide_y)
+                print(image.shape, x0 + IMAGE_DIMENSION, y0 + IMAGE_DIMENSION)
+            cropped = image[x0 : x0 + IMAGE_DIMENSION, y0 : y0 + IMAGE_DIMENSION]
 
-            # scale = random.uniform(0.8, 0.9)
-            scale = 0.8
-            image = cv2.resize(image, (0, 0), fx=scale, fy=scale)
-            nb_x = math.ceil(image.shape[0] / IMAGE_DIMENSION)
-            nb_y = math.ceil(image.shape[1] / IMAGE_DIMENSION)
-            slide_x = (image.shape[0] - IMAGE_DIMENSION) / (nb_x - 1)
-            slide_y = (image.shape[1] - IMAGE_DIMENSION) / (nb_y - 1)
-            for x in range(nb_x):
-                for y in range(nb_y):
-                    x0 = round(x * slide_x)
-                    y0 = round(y * slide_y)
-                    if x0 + IMAGE_DIMENSION > image.shape[0]:
-                        print(nb_x, x, slide_x)
-                        print(image.shape, x0 + IMAGE_DIMENSION, y0 + IMAGE_DIMENSION)
-                    if y0 + IMAGE_DIMENSION > image.shape[1]:
-                        print(nb_y, y, slide_y)
-                        print(image.shape, x0 + IMAGE_DIMENSION, y0 + IMAGE_DIMENSION)
-                    cropped = image[
-                        x0 : x0 + IMAGE_DIMENSION, y0 : y0 + IMAGE_DIMENSION
-                    ]
+            base = f"-{x}-{y}-"
+            # base = '-'
+            # cropped = image
+            dest_folder = None
+            if save:
+                dest_folder = os.path.join("augmented_data", category)
+                if not os.path.exists(dest_folder):
+                    os.makedirs(dest_folder)
 
-                    base = f"-{x}-{y}-"
-                    cv2.imwrite(
-                        os.path.join(
-                            dest_folder,
-                            f"zoom{base}{os.path.basename(image_filename)}",
-                        ),
-                        cv2.resize(cropped, (0, 0), fx=scale, fy=scale),
-                    )
+            results += [cropped]
+            if save:
+                cv2.imwrite(
+                    os.path.join(
+                        dest_folder,
+                        f"base{base}{os.path.basename(image_filename)}",
+                    ),
+                    results[-1],
+                )
+            results += [ndimage.rotate(cropped, 180)]
+            if save:
+                cv2.imwrite(
+                    os.path.join(
+                        dest_folder,
+                        f"rotated{base}{os.path.basename(image_filename)}",
+                    ),
+                    results[-1],
+                )
+            results += [np.fliplr(cropped)]
+            if save:
+                cv2.imwrite(
+                    os.path.join(
+                        dest_folder,
+                        f"fliplr{base}{os.path.basename(image_filename)}",
+                    ),
+                    results[-1],
+                )
+            results += [np.flip(cropped)]
+            if save:
+                cv2.imwrite(
+                    os.path.join(
+                        dest_folder,
+                        f"flipud{base}{os.path.basename(image_filename)}",
+                    ),
+                    results[-1],
+                )
+
+    # scale = random.uniform(0.8, 0.9)
+    scale = 0.8
+    image = cv2.resize(image, (0, 0), fx=scale, fy=scale)
+
+    nb_x = math.ceil(image.shape[0] / IMAGE_DIMENSION)
+    nb_y = math.ceil(image.shape[1] / IMAGE_DIMENSION)
+    slide_x = (image.shape[0] - IMAGE_DIMENSION) / (nb_x - 1)
+    slide_y = (image.shape[1] - IMAGE_DIMENSION) / (nb_y - 1)
+    for x in range(nb_x):
+        for y in range(nb_y):
+            x0 = round(x * slide_x)
+            y0 = round(y * slide_y)
+            if x0 + IMAGE_DIMENSION > image.shape[0]:
+                print(nb_x, x, slide_x)
+                print(image.shape, x0 + IMAGE_DIMENSION, y0 + IMAGE_DIMENSION)
+            if y0 + IMAGE_DIMENSION > image.shape[1]:
+                print(nb_y, y, slide_y)
+                print(image.shape, x0 + IMAGE_DIMENSION, y0 + IMAGE_DIMENSION)
+            cropped = image[x0 : x0 + IMAGE_DIMENSION, y0 : y0 + IMAGE_DIMENSION]
+
+            results += [cropped]
+            if save:
+                base = f"-{x}-{y}-"
+                cv2.imwrite(
+                    os.path.join(
+                        dest_folder,
+                        f"zoom{base}{os.path.basename(image_filename)}",
+                    ),
+                    results[-1],
+                )
+    return results
 
 
 def load_image(path):
@@ -262,13 +292,16 @@ def apply(model, name, path):
     # sample_test = load_img(path, target_size=(IMAGE_DIMENSION, IMAGE_DIMENSION))
     # sample_test = img_to_array(sample_test)
     margin = 5
-    margin = 0
+    margin = 5
 
     image = cv2.imread(path)
+    # to yuv
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2YUV)
 
-    #img = load_img(        path    )
-    #image = img_to_array(img).astype("float32")
+    # img = load_img(        path    )
+    # image = img_to_array(img).astype("float32")
 
+    images = []
 
     # split the image into regular IMAGE_DIMENSIONxIMAGE_DIMENSION images
     nb_x = math.ceil(image.shape[0] / (IMAGE_DIMENSION - 2 * margin))
@@ -282,10 +315,25 @@ def apply(model, name, path):
             cropped = image[x0 : x0 + IMAGE_DIMENSION, y0 : y0 + IMAGE_DIMENSION, :]
 
             sample_test_img = cropped.astype("float32") / 255.0
-            sample_test_img = np.expand_dims(cropped, axis=0)
+            images.append(sample_test_img)
+
+    samples = np.zeros((len(images), IMAGE_DIMENSION, IMAGE_DIMENSION, 3))
+    for nb, img in enumerate(images):
+        samples[nb] = img
+
+    predictions = model.predict(samples)                * 255.0
+    index = 0
+
+    for x in range(nb_x):
+        for y in range(nb_y):
+            x0 = round(x * slide_x)
+            y0 = round(y * slide_y)
 
             # Get the prediction
-            predicted_label = np.squeeze(model.predict(sample_test_img))
+            predicted = predictions[index]
+            print(predicted.shape)
+            index += 1
+
             # Update image with the prediction
             min_x = 0 if x == 0 else x0 + margin
             min_y = 0 if y == 0 else y0 + margin
@@ -303,23 +351,22 @@ def apply(model, name, path):
             predict_max_y = (
                 IMAGE_DIMENSION if y == nb_y - 1 else IMAGE_DIMENSION - margin
             )
+            print(min_x,max_x, min_y,max_y)
+            print(predict_min_x,predict_max_x, predict_min_y,predict_max_y)
+            print()
 
             image[min_x:max_x, min_y:max_y, :] = (
-                predicted_label[
-                    predict_min_x:predict_max_x, predict_min_y:predict_max_y
+                predicted[
+                    predict_min_x:predict_max_x, predict_min_y:predict_max_y, :
                 ]
-                * 255.0
             )
-            data = np.zeros(
-                (predicted_label.shape[0], predicted_label.shape[1], 1), dtype=np.uint8
-            )
-            data = predicted_label
+            data = predicted
             # save_img(f"{name}-{x}-{y}-gray-{os.path.basename(path)}", data)
     # to BGR
-    #image = cv2.cvtColor(image, cv2.COLOR_YUV2BGR)
+    image = cv2.cvtColor(image, cv2.COLOR_YUV2BGR)
     # Save the image
     cv2.imwrite(f"{name}-{os.path.basename(path)}", image)
-    #save_img(f"{name}-{os.path.basename(path)}", image)
+    # save_img(f"{name}-{os.path.basename(path)}", image)
 
 
 MODELS = ()
@@ -345,10 +392,38 @@ def train():
             model.save(f"{name}.keras", overwrite=True)
         except Exception as e:
             print(f"Failed to train model {name}: {e}")
-            import traceback
-
-            print(traceback.format_exc())
             raise e
+
+
+import gc
+
+
+def train_many():
+    for name, model in MODELS:
+        model.summary()
+        if os.path.exists(f"{name}.keras"):
+            model = keras.saving.load_model(f"{name}.keras")
+        for epoch in range(20):
+            filenames = [random.choice(list(glob.glob("clean-data/*.png")))]
+            for nb, filename in enumerate(filenames):
+                print(f"Epoch {epoch} {filename} {nb}/{len(filenames)}")
+                images = data_augmentation_image(filename, save=False)
+
+                image_list = np.zeros(
+                    (len(images), IMAGE_DIMENSION, IMAGE_DIMENSION, 3)
+                )
+
+                for i, image in enumerate(images):
+                    image_list[i] = image.astype("float32") / 255.0
+
+                try:
+                    model.fit(image_list, image_list, batch_size=20)
+                    # Save the model
+                    model.save(f"{name}.keras", overwrite=True)
+                    return
+                except Exception as e:
+                    print(f"Failed to train model {name}: {e}")
+                    raise e
 
 
 def do_apply():
@@ -371,12 +446,39 @@ def do_apply():
 import pikepdf
 
 
-def list_pdf_images(path: str):
-    with pikepdf.open(path) as pdf:
-        for i, page in enumerate(pdf.pages):
-            for image in page.images.values():
-                pdfimage = pikepdf.PdfImage(image)
-                print(pdfimage.width, pdfimage.height)
+def get_original_pdf():
+    for path in glob.glob(
+        "/home/sbrunner/Documents Stéphane/originals/**/*.pdf", recursive=True
+    ):
+        max_image_size = 0
+        with pikepdf.open(path) as pdf:
+            for page in pdf.pages:
+                for image in page.images.values():
+                    pdfimage = pikepdf.PdfImage(image)
+                    max_image_size = max(
+                        max_image_size, pdfimage.width * pdfimage.height
+                    )
+
+        if max_image_size < 100000:
+            print(path)
+            # move file to clean-dat if he didn't already exists
+            dest = os.path.join("clean-data", os.path.basename(path))
+            if not os.path.exists(dest):
+                shutil.move(path, dest)
+            else:
+                print(f"{dest} already exists")
+
+
+import subprocess
+
+
+def convert_original_pdf_to_png():
+    for path in glob.glob("clean-data/*.pdf"):
+        print(path)
+        # convert pdf to png in 300 dpi
+        subprocess.run(
+            ["convert", "-density", "300", path, f"{path[:-4]}.png"], check=True
+        )
 
 
 MODELS = (
@@ -384,7 +486,32 @@ MODELS = (
     ("autoencoder", build_autoencoder()),
     # ("autoencoder_my", build_autoencoder_my()),
 )
+
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--sub", action="store_true")
+parser.add_argument("--one", action="store_true")
+parser.add_argument("--apply", action="store_true")
+
+args = parser.parse_args()
+
+if args.sub:
+    while True:
+        subprocess.run(["python", "try-ai.py", "--one"], check=True)
+
+if args.one:
+    # get_original_pdf()
+    # convert_original_pdf_to_png()
+    # data_augmentation(xy=True)
+    train_many()
+    exit()
+
+if args.apply:
+    do_apply()
+    exit()
+
 # list_pdf_images('/tmp/test.pdf')
-# data_augmentation()
-# train()
+data_augmentation()
+train()
 do_apply()
