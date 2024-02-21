@@ -70,7 +70,37 @@ def model_64_128() -> Model:
     return autoencoder
 
 
-MODELS = {"model_64_128": model_64_128}
+def model_64_128_256() -> Model:
+    input_img = Input(shape=(IMAGE_DIMENSION, IMAGE_DIMENSION, 3), name="image_input")
+
+    # Encoder
+    x = Conv2D(64, (3, 3), activation="relu", padding="same", name="ConvEnc1")(input_img)
+    x = MaxPooling2D((2, 2), padding="same", name="pool1")(x)
+    x = Conv2D(128, (3, 3), activation="relu", padding="same", name="ConvEnc2")(x)
+    x = MaxPooling2D((2, 2), padding="same", name="pool2")(x)
+    x = Conv2D(256, (3, 3), activation="relu", padding="same", name="ConvEnc3")(x)
+    x = MaxPooling2D((2, 2), padding="same", name="pool3")(x)
+
+    # Decoder
+    x = Conv2D(256, (3, 3), activation="relu", padding="same", name="ConvDec1")(x)
+    x = UpSampling2D((2, 2), name="upsample1")(x)
+    x = Conv2D(128, (3, 3), activation="relu", padding="same", name="ConvDec2")(x)
+    x = UpSampling2D((2, 2), name="upsample2")(x)
+    x = Conv2D(64, (3, 3), activation="relu", padding="same", name="ConvDec3")(x)
+    x = UpSampling2D((2, 2), name="upsample3")(x)
+    x = Conv2D(3, (3, 3), activation="sigmoid", padding="same", name="ConvDec4")(x)
+
+    # Model
+    autoencoder = Model(inputs=input_img, outputs=x)
+    autoencoder.compile(optimizer="adam", loss="binary_crossentropy")
+
+    return autoencoder
+
+
+MODELS = {
+    "model_64_128": model_64_128,
+    "model_64_128_256": model_64_128_256,
+}
 
 
 def train_many(model_name: str, filename: str) -> None:
