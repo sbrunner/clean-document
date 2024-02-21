@@ -1,0 +1,147 @@
+#!/usr/bin/env python3
+
+import argparse
+import glob
+import os.path
+import random
+import subprocess
+import sys
+
+import keras.saving
+import matplotlib.pyplot as plt
+import numpy as np
+import yaml
+from keras.layers import Conv2D, Input, MaxPooling2D, UpSampling2D
+from keras.models import Model
+
+from clean_document.utils import data_augmentation_image
+
+IMAGE_DIMENSION = 256
+
+
+def model_64_128() -> Model:
+    """
+    _________________________________________________________________
+     Layer (type)                Output Shape              Param #
+    =================================================================
+     image_input (InputLayer)    [(None, 256, 256, 3)]     0
+
+     ConvEnc1 (Conv2D)           (None, 256, 256, 64)      1792
+
+     pool1 (MaxPooling2D)        (None, 128, 128, 64)      0
+
+     ConvEnc2 (Conv2D)           (None, 128, 128, 128)     73856
+
+     pool2 (MaxPooling2D)        (None, 64, 64, 128)       0
+
+     ConvDec1 (Conv2D)           (None, 64, 64, 128)       147584
+
+     upsample1 (UpSampling2D)    (None, 128, 128, 128)     0
+
+     ConvDec2 (Conv2D)           (None, 128, 128, 64)      73792
+
+     upsample2 (UpSampling2D)    (None, 256, 256, 64)      0
+
+     ConvDec3 (Conv2D)           (None, 256, 256, 3)       1731
+
+    =================================================================
+    Total params: 298755 (1.14 MB)
+    Trainable params: 298755 (1.14 MB)
+    Non-trainable params: 0 (0.00 Byte)"""
+    input_img = Input(shape=(IMAGE_DIMENSION, IMAGE_DIMENSION, 3), name="image_input")
+
+    # Encoder
+    x = Conv2D(64, (3, 3), activation="relu", padding="same", name="ConvEnc1")(input_img)
+    x = MaxPooling2D((2, 2), padding="same", name="pool1")(x)
+    x = Conv2D(128, (3, 3), activation="relu", padding="same", name="ConvEnc2")(x)
+    x = MaxPooling2D((2, 2), padding="same", name="pool2")(x)
+
+    # Decoder
+    x = Conv2D(128, (3, 3), activation="relu", padding="same", name="ConvDec1")(x)
+    x = UpSampling2D((2, 2), name="upsample1")(x)
+    x = Conv2D(64, (3, 3), activation="relu", padding="same", name="ConvDec2")(x)
+    x = UpSampling2D((2, 2), name="upsample2")(x)
+    x = Conv2D(3, (3, 3), activation="sigmoid", padding="same", name="ConvDec3")(x)
+
+    # Model
+    autoencoder = Model(inputs=input_img, outputs=x)
+    autoencoder.compile(optimizer="adam", loss="binary_crossentropy")
+
+    return autoencoder
+
+
+MODELS = {"model_64_128": model_64_128}
+
+
+def train_many(model_name: str, filename: str) -> None:
+    if os.path.exists(f"{model_name}.keras"):
+        model = keras.saving.load_model(f"{model_name}.keras")
+    else:
+        model = MODELS[model_name]()
+    model.summary()
+    images = data_augmentation_image(filename, IMAGE_DIMENSION, save=False)
+
+    image_list = np.zeros((len(images), IMAGE_DIMENSION, IMAGE_DIMENSION, 3))
+
+    for i, image in enumerate(images):
+        image_list[i] = image.astype("float32") / 255.0
+
+    try:
+        if os.path.exists(f"{model_name}-history.yaml"):
+            with open(f"{model_name}-history.yaml", encoding="utf-8") as history_file:
+                history = yaml.load(history_file.read(), Loader=yaml.SafeLoader)
+        else:
+            history = {
+                "loss": [],
+            }
+        hist = model.fit(image_list, image_list, batch_size=20)
+        history.setdefault("loss", []).append(hist.history["loss"])
+
+        plt.plot(history["loss"])
+        plt.title("Model loss")
+        plt.ylabel("Loss")
+        plt.legend(["Train"], loc="upper left")
+        # Save plot to file
+        plt.savefig(f"{model_name}.png")
+
+        # Save the model
+        model.save(f"{model_name}.keras", overwrite=True)
+        with open(f"{model_name}-history.yaml", "w", encoding="utf-8") as history_file:
+            history_file.write(yaml.dump(history))
+        return
+    except Exception as e:
+        print(f"Failed to train model {model_name}: {e}")
+        raise e
+
+
+def _main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--name", default="model_64_128")
+    parser.add_argument("--one", default=None, type=str)
+
+    args = parser.parse_args()
+
+    if args.one is not None:
+        train_many(args.name, args.one)
+    else:
+        if os.path.exists(f"{args.name}-status.yaml"):
+            with open(f"{args.name}-status.yaml", encoding="utf-8") as status_file:
+                status = yaml.load(status_file.read(), Loader=yaml.SafeLoader)
+        else:
+            files = list(glob.glob("clean-data/*.png"))
+            random.shuffle(files)
+            status = {"files": files, "index": 0, "epoch": 0}
+
+        filenames = status["files"]
+
+        while status["index"] < len(filenames):
+            filename = filenames[status["index"]]
+            print(f"Epoch {status['epoch']} {filename} {status['index']}/{len(filenames)}")
+            subprocess.run([sys.argv[0], f"--one={filename}", f"--name={args.name}"], check=True)
+            status["index"] += 1
+            with open(f"{args.name}-status.yaml", "w", encoding="utf-8") as status_file:
+                status_file.write(yaml.dump(status))
+
+
+if __name__ == "__main__":
+    _main()

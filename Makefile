@@ -9,4 +9,3 @@ data.tar.bz2.des3:
 get-data:
 	openssl des3 -d -in data.tar.bz2.des3 -out data.tar.bz2 -k $(ZIP_PASSWORD)
 	tar -xjf data.tar.bz2
-
