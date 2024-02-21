@@ -10,12 +10,14 @@ import sys
 import keras.saving
 import matplotlib.pyplot as plt
 import numpy as np
+import tensorflow as tf
 import yaml
 from keras.layers import Conv2D, Input, MaxPooling2D, UpSampling2D
 from keras.models import Model
 
 from clean_document.utils import data_augmentation_image
 
+NUMBER_OF_IMAGES = 10
 IMAGE_DIMENSION = 256
 
 
@@ -43,34 +45,6 @@ def model_32_64():
 
 
 def model_64_128() -> Model:
-    """
-    _________________________________________________________________
-     Layer (type)                Output Shape              Param #
-    =================================================================
-     image_input (InputLayer)    [(None, 256, 256, 3)]     0
-
-     ConvEnc1 (Conv2D)           (None, 256, 256, 64)      1792
-
-     pool1 (MaxPooling2D)        (None, 128, 128, 64)      0
-
-     ConvEnc2 (Conv2D)           (None, 128, 128, 128)     73856
-
-     pool2 (MaxPooling2D)        (None, 64, 64, 128)       0
-
-     ConvDec1 (Conv2D)           (None, 64, 64, 128)       147584
-
-     upsample1 (UpSampling2D)    (None, 128, 128, 128)     0
-
-     ConvDec2 (Conv2D)           (None, 128, 128, 64)      73792
-
-     upsample2 (UpSampling2D)    (None, 256, 256, 64)      0
-
-     ConvDec3 (Conv2D)           (None, 256, 256, 3)       1731
-
-    =================================================================
-    Total params: 298755 (1.14 MB)
-    Trainable params: 298755 (1.14 MB)
-    Non-trainable params: 0 (0.00 Byte)"""
     input_img = Input(shape=(IMAGE_DIMENSION, IMAGE_DIMENSION, 3), name="image_input")
 
     # Encoder
@@ -127,40 +101,68 @@ MODELS = {
 }
 
 
-def train_many(model_name: str, filename: str) -> None:
-    if os.path.exists(f"{model_name}.keras"):
-        model = keras.saving.load_model(f"{model_name}.keras")
+# Generator that returns the images
+class Images:
+    def __init__(self, filenames: list[str]):
+        self.filenames = filenames
+
+    def __call__(self):
+        print("Call")
+        for filename in self.filenames:
+            images = data_augmentation_image(filename, IMAGE_DIMENSION, save=False)
+            for image in images:
+                image = image.astype("float32") / 255.0
+                image = np.expand_dims(image, axis=0)
+                yield image, image
+
+
+def train_many(model_name: str, filenames: list[str], test: list[str]) -> None:
+    if os.path.exists(f"results/{model_name}.keras"):
+        model = keras.saving.load_model(f"results/{model_name}.keras")
     else:
         model = MODELS[model_name]()
-    model.summary()
-    images = data_augmentation_image(filename, IMAGE_DIMENSION, save=False)
+    if not os.path.exists(f"results/{model_name}.summary"):
+        with open(f"results/{model_name}.summary", "w", encoding="utf-8") as summary_file:
+            model.summary(print_fn=lambda x: summary_file.write(x + "\n"))
 
-    image_list = np.zeros((len(images), IMAGE_DIMENSION, IMAGE_DIMENSION, 3))
-
-    for i, image in enumerate(images):
-        image_list[i] = image.astype("float32") / 255.0
+    # create a tf.data.Dataset.from_generator that returns to numpy array od shape (255, 255, 3
+    train = tf.data.Dataset.from_generator(
+        Images(filenames),
+        output_signature=(
+            tf.TensorSpec(shape=(None, IMAGE_DIMENSION, IMAGE_DIMENSION, 3), dtype=tf.float32),
+            tf.TensorSpec(shape=(None, IMAGE_DIMENSION, IMAGE_DIMENSION, 3), dtype=tf.float32),
+        ),
+    )
+    val = Images(test)
 
     try:
-        if os.path.exists(f"{model_name}-history.yaml"):
-            with open(f"{model_name}-history.yaml", encoding="utf-8") as history_file:
+        if os.path.exists(f"results/{model_name}-history.yaml"):
+            with open(f"results/{model_name}-history.yaml", encoding="utf-8") as history_file:
                 history = yaml.load(history_file.read(), Loader=yaml.SafeLoader)
         else:
             history = {
                 "loss": [],
+                "val_loss": [],
             }
-        hist = model.fit(image_list, image_list, batch_size=20)
+        hist = model.fit(
+            train,
+            batch_size=1,  # can be 20 with a GPU
+            validation_data=val,
+        )
         history.setdefault("loss", []).append(hist.history["loss"])
+        history.setdefault("val_loss", []).append(hist.history["val_loss"])
 
         plt.plot(history["loss"])
+        plt.plot(history["val_loss"])
         plt.title("Model loss")
         plt.ylabel("Loss")
-        plt.legend(["Train"], loc="upper left")
+        plt.legend(["Train", "Test"], loc="upper left")
         # Save plot to file
-        plt.savefig(f"{model_name}.png")
+        plt.savefig(f"results/{model_name}.png")
 
         # Save the model
-        model.save(f"{model_name}.keras", overwrite=True)
-        with open(f"{model_name}-history.yaml", "w", encoding="utf-8") as history_file:
+        model.save(f"results/{model_name}.keras", overwrite=True)
+        with open(f"results/{model_name}-history.yaml", "w", encoding="utf-8") as history_file:
             history_file.write(yaml.dump(history))
         return
     except Exception as e:
@@ -170,30 +172,47 @@ def train_many(model_name: str, filename: str) -> None:
 
 def _main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--name", default="model_64_128")
-    parser.add_argument("--one", default=None, type=str)
+    parser.add_argument(
+        "--name",
+        default="model_64_128",
+        help="The name of the model, " + ", ".join(MODELS.keys()),
+    )
+    parser.add_argument("--file", action="append", help="The files to process")
+    parser.add_argument("--test", action="append", help="The test files")
 
     args = parser.parse_args()
 
-    if args.one is not None:
-        train_many(args.name, args.one)
+    if args.file:
+        train_many(args.name, args.file, args.test)
     else:
-        if os.path.exists(f"{args.name}-status.yaml"):
-            with open(f"{args.name}-status.yaml", encoding="utf-8") as status_file:
+        if os.path.exists(f"results/{args.name}-status.yaml"):
+            with open(f"results/{args.name}-status.yaml", encoding="utf-8") as status_file:
                 status = yaml.load(status_file.read(), Loader=yaml.SafeLoader)
         else:
             files = list(glob.glob("clean-data/*.png"))
             random.shuffle(files)
-            status = {"files": files, "index": 0, "epoch": 0}
+            status = {
+                "files": files,
+                "index": 0,
+                "epoch": 0,
+                "test_files": list(glob.glob("clean-test/*.png")),
+            }
 
         filenames = status["files"]
 
         while status["index"] < len(filenames):
-            filename = filenames[status["index"]]
-            print(f"Epoch {status['epoch']} {filename} {status['index']}/{len(filenames)}")
-            subprocess.run([sys.argv[0], f"--one={filename}", f"--name={args.name}"], check=True)
-            status["index"] += 1
-            with open(f"{args.name}-status.yaml", "w", encoding="utf-8") as status_file:
+            files = filenames[status["index"] : status["index"] + NUMBER_OF_IMAGES]
+            print("=" * 18)
+            print(f"Epoch {status['epoch']} {status['index']}/{len(filenames)}")
+            print("=" * 18)
+
+            cmd = [sys.argv[0], f"--name={args.name}"]
+            cmd += [f"--file={filename}" for filename in files]
+            cmd += [f"--test={filename}" for filename in status["test_files"]]
+            subprocess.run(cmd, check=True)
+
+            status["index"] += NUMBER_OF_IMAGES
+            with open(f"results/{args.name}-status.yaml", "w", encoding="utf-8") as status_file:
                 status_file.write(yaml.dump(status))
 
 

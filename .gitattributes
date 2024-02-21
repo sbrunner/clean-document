@@ -1,4 +1,4 @@
 * text eol=lf
 Makefile text whitespace=indent-with-non-tab
 *.keras binary
-*.des binary
+*.des3 binary
