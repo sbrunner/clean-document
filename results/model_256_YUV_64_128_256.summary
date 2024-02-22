@@ -1,0 +1,37 @@
+Model: "model"
+_________________________________________________________________
+ Layer (type)                Output Shape              Param #   
+=================================================================
+ image_input (InputLayer)    [(None, None, None, 3)]   0         
+                                                                 
+ ConvEnc1 (Conv2D)           (None, None, None, 64)    1792      
+                                                                 
+ pool1 (MaxPooling2D)        (None, None, None, 64)    0         
+                                                                 
+ ConvEnc2 (Conv2D)           (None, None, None, 128)   73856     
+                                                                 
+ pool2 (MaxPooling2D)        (None, None, None, 128)   0         
+                                                                 
+ ConvEnc3 (Conv2D)           (None, None, None, 256)   295168    
+                                                                 
+ pool3 (MaxPooling2D)        (None, None, None, 256)   0         
+                                                                 
+ ConvDec1 (Conv2D)           (None, None, None, 256)   590080    
+                                                                 
+ upsample1 (UpSampling2D)    (None, None, None, 256)   0         
+                                                                 
+ ConvDec2 (Conv2D)           (None, None, None, 128)   295040    
+                                                                 
+ upsample2 (UpSampling2D)    (None, None, None, 128)   0         
+                                                                 
+ ConvDec3 (Conv2D)           (None, None, None, 64)    73792     
+                                                                 
+ upsample3 (UpSampling2D)    (None, None, None, 64)    0         
+                                                                 
+ ConvDec4 (Conv2D)           (None, None, None, 3)     1731      
+                                                                 
+=================================================================
+Total params: 1331459 (5.08 MB)
+Trainable params: 1331459 (5.08 MB)
+Non-trainable params: 0 (0.00 Byte)
+_________________________________________________________________

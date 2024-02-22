@@ -1,8 +1,7 @@
 __pycache__/
 /data
-/train.tar.bz2
-/augmented_data/
-/autoencoder-*.png
+/data.tar.bz2
 /old
 /clean-data
 /clean-test
+/results/*.png
