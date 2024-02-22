@@ -1,5 +1,6 @@
 import math
 import os.path
+import random
 
 import cv2
 import numpy as np
@@ -75,14 +76,14 @@ def data_augmentation_image(image_filename, image_dimension, category=None, save
                     results[-1],
                 )
 
-    # scale = random.uniform(0.8, 0.9)
-    scale = 0.8
+    scale = random.uniform(0.5, 0.9)
+    # scale = 0.8
     image = cv2.resize(image, (0, 0), fx=scale, fy=scale)
 
     nb_x = math.ceil(image.shape[0] / image_dimension)
     nb_y = math.ceil(image.shape[1] / image_dimension)
-    slide_x = (image.shape[0] - image_dimension) / (nb_x - 1)
-    slide_y = (image.shape[1] - image_dimension) / (nb_y - 1)
+    slide_x = (image.shape[0] - image_dimension) / (nb_x - 1) if nb_x > 1 else 0
+    slide_y = (image.shape[1] - image_dimension) / (nb_y - 1) if nb_y > 1 else 0
     for x in range(nb_x):
         for y in range(nb_y):
             x0 = round(x * slide_x)

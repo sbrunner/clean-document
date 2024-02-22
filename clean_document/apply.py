@@ -2,11 +2,10 @@ import math
 
 import cv2
 import numpy as np
-from keras_preprocessing.image import img_to_array, load_img, save_img
 
 
 def apply(model, image_src_filename, image_dst_filename, rgb=False, margin=5):
-    model_input_shape = model.layers[0].input_shape[1:]
+    model_input_shape = model.input_shape[1:]
 
     image = cv2.imread(image_src_filename)
     if not rgb or model_input_shape[2] == 1:
