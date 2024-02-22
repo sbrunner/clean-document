@@ -17,12 +17,12 @@ from keras.models import Model
 
 from clean_document.utils import data_augmentation_image
 
-NUMBER_OF_IMAGES = 10
+NUMBER_OF_IMAGES = 5
 IMAGE_DIMENSION = 256
 
 
 def model_32_64():
-    input_img = Input(shape=(IMAGE_DIMENSION, IMAGE_DIMENSION, 3), name="image_input")
+    input_img = Input(shape=(None, None, 3), name="image_input")
 
     # Encoder
     x = Conv2D(32, (3, 3), activation="relu", padding="same", name="Conv1")(input_img)
@@ -45,7 +45,7 @@ def model_32_64():
 
 
 def model_64_128() -> Model:
-    input_img = Input(shape=(IMAGE_DIMENSION, IMAGE_DIMENSION, 3), name="image_input")
+    input_img = Input(shape=(None, None, 3), name="image_input")
 
     # Encoder
     x = Conv2D(64, (3, 3), activation="relu", padding="same", name="ConvEnc1")(input_img)
@@ -68,7 +68,7 @@ def model_64_128() -> Model:
 
 
 def model_64_128_256() -> Model:
-    input_img = Input(shape=(IMAGE_DIMENSION, IMAGE_DIMENSION, 3), name="image_input")
+    input_img = Input(shape=(None, None, 3), name="image_input")
 
     # Encoder
     x = Conv2D(64, (3, 3), activation="relu", padding="same", name="ConvEnc1")(input_img)
@@ -95,9 +95,9 @@ def model_64_128_256() -> Model:
 
 
 MODELS = {
-    "model_32_64": model_32_64,
-    "model_64_128": model_64_128,
-    "model_64_128_256": model_64_128_256,
+    f"model_{IMAGE_DIMENSION}_YUV_32_64": model_32_64,
+    f"model_{IMAGE_DIMENSION}_YUV_64_128": model_64_128,
+    f"model_{IMAGE_DIMENSION}_YUV_64_128_256": model_64_128_256,
 }
 
 
@@ -129,11 +129,17 @@ def train_many(model_name: str, filenames: list[str], test: list[str]) -> None:
     train = tf.data.Dataset.from_generator(
         Images(filenames),
         output_signature=(
-            tf.TensorSpec(shape=(None, IMAGE_DIMENSION, IMAGE_DIMENSION, 3), dtype=tf.float32),
-            tf.TensorSpec(shape=(None, IMAGE_DIMENSION, IMAGE_DIMENSION, 3), dtype=tf.float32),
+            tf.TensorSpec(shape=(None, None, None, 3), dtype=tf.float32),
+            tf.TensorSpec(shape=(None, None, None, 3), dtype=tf.float32),
         ),
     )
-    val = Images(test)
+    val = tf.data.Dataset.from_generator(
+        Images(test),
+        output_signature=(
+            tf.TensorSpec(shape=(None, None, None, 3), dtype=tf.float32),
+            tf.TensorSpec(shape=(None, None, None, 3), dtype=tf.float32),
+        ),
+    )
 
     try:
         if os.path.exists(f"results/{model_name}-history.yaml"):
@@ -146,7 +152,6 @@ def train_many(model_name: str, filenames: list[str], test: list[str]) -> None:
             }
         hist = model.fit(
             train,
-            batch_size=1,  # can be 20 with a GPU
             validation_data=val,
         )
         history.setdefault("loss", []).append(hist.history["loss"])
@@ -174,7 +179,7 @@ def _main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--name",
-        default="model_64_128",
+        default=f"model_{IMAGE_DIMENSION}_YUV_32_64",
         help="The name of the model, " + ", ".join(MODELS.keys()),
     )
     parser.add_argument("--file", action="append", help="The files to process")
