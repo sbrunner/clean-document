@@ -15,11 +15,11 @@ def apply(model, image_src_filename, image_dst_filename, rgb=False, margin=5):
     if model_input_shape[0] is None and model_input_shape[1] is None:
         sample_test_img = np.expand_dims(image, axis=0)
         # Get the prediction
-        predicted_label = np.squeeze(model.predict(sample_test_img.astype("float32") / 255.0)) * 255.0
+        predictions = np.squeeze(model.predict(sample_test_img.astype("float32") / 255.0)) * 255.0
         if model_input_shape[2] == 1:
-            image[:, :, 0] = predicted_label
+            image[:, :, 0] = predictions
         else:
-            image = predicted_label
+            image = predictions
     else:
         assert model_input_shape[0] is not None
         assert model_input_shape[1] is not None
@@ -43,7 +43,7 @@ def apply(model, image_src_filename, image_dst_filename, rgb=False, margin=5):
                 sample_test_img = cropped.astype("float32") / 255.0
                 images.append(sample_test_img)
 
-        samples = np.zeros((len(images), model_input_shape[0], model_input_shape[1], 1))
+        samples = np.zeros((len(images), model_input_shape[0], model_input_shape[1], model_input_shape[2]))
         for nb, img in enumerate(images):
             samples[nb] = img
 
