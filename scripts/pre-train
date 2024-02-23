@@ -7,6 +7,7 @@ import random
 import subprocess
 import sys
 
+import cv2
 import keras.saving
 import matplotlib.pyplot as plt
 import numpy as np
@@ -23,8 +24,6 @@ IMAGE_DIMENSION = 256
 
 
 def model_u_net() -> Model:
-    input_img = Input(shape=(None, None, 3), name="image_input")
-
     # Create a model based on a pretrained U-net
     # https://keras.io/examples/vision/oxford_pets_image_segmentation/
     # https://keras.io/api/applications/
@@ -201,7 +200,6 @@ class Images:
         self.filenames = filenames
 
     def __call__(self):
-        print("Call")
         for filename in self.filenames:
             images = data_augmentation_image(filename, IMAGE_DIMENSION, save=False)
             for image in images:

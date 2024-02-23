@@ -9,13 +9,12 @@ def apply(model, image_src_filename, image_dst_filename, rgb=False, margin=5):
 
     image = cv2.imread(image_src_filename)
     if not rgb or model_input_shape[2] == 1:
-        # to yuv
         image = cv2.cvtColor(image, cv2.COLOR_BGR2YUV)
 
     if model_input_shape[0] is None and model_input_shape[1] is None:
-        sample_test_img = np.expand_dims(image, axis=0)
+        sample_test_img = np.expand_dims(image, axis=0).astype("float32") / 255.0
         # Get the prediction
-        predictions = np.squeeze(model.predict(sample_test_img.astype("float32") / 255.0)) * 255.0
+        predictions = (model.predict(sample_test_img)[0] * 255.0).astype("uint8")
         if model_input_shape[2] == 1:
             image[:, :, 0] = predictions
         else:
@@ -47,7 +46,7 @@ def apply(model, image_src_filename, image_dst_filename, rgb=False, margin=5):
         for nb, img in enumerate(images):
             samples[nb] = img
 
-        predictions = model.predict(samples) * 255.0
+        predictions = (model.predict(samples) * 255.0).astype("uint8")
         index = 0
 
         for x in range(nb_x):
