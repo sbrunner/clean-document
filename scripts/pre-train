@@ -1,16 +1,11 @@
 #!/usr/bin/env python3
 
-# TODO
-# electricite
-# tranche Dumnica
-
 import argparse
 import glob
 import os.path
 import random
 import subprocess
 import sys
-from collections.abc import Callable
 
 import cv2
 import keras.saving
@@ -18,209 +13,108 @@ import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
 import yaml
-from keras.layers import Conv2D, Conv2DTranspose, Dropout, Input, MaxPooling2D, UpSampling2D, concatenate
-from keras.models import Model
+from tensorflow_examples.models.pix2pix import pix2pix
 
 from clean_document.apply import apply
 from clean_document.utils import data_augmentation_image
 
-NUMBER_OF_IMAGES = 5
-IMAGE_DIMENSION = 256
+NUMBER_OF_IMAGES = 1
+IMAGE_SIZE = 2048
+IMAGE_SIZE = 1024
 
 # TODO
-# - Document Renovate usage in c2cgiutils wiki
-# - Add zero padding in apply to fit convolutioner
+# - separate denozing and removing folds, staple mark, hole punch.
+# https://keras-io.translate.goog/examples/vision/autoencoder/?_x_tr_sl=auto&_x_tr_tl=fr&_x_tr_hl=fr
 
 
-class UNetModel:
-    def __init__(self, nb_layers, start_neurons):
-        self.nb_layers = nb_layers
-        self.start_neurons = start_neurons
+def model():
+    base_model = tf.keras.applications.MobileNetV2(input_shape=[None, None, 3], include_top=False)
 
-    def __call__(self) -> Model:
-        start_neurons = self.start_neurons
+    # Use the activations of these layers
+    layer_names = [
+        "block_1_expand_relu",  # 64x64
+        "block_3_expand_relu",  # 32x32
+        "block_6_expand_relu",  # 16x16
+        "block_13_expand_relu",  # 8x8
+        "block_16_project",  # 4x4
+    ]
+    base_model_outputs = [base_model.get_layer(name).output for name in layer_names]
 
-        input_layer = Input(shape=(None, None, 3), dtype=tf.float32, name="image_input")
-        input_layer = Input(shape=(None, None, 3), name="image_input")
+    # Create the feature extraction model
+    down_stack = tf.keras.Model(inputs=base_model.input, outputs=base_model_outputs)
 
-        output = input_layer
-        conv = {}
+    down_stack.trainable = False
 
-        # Encoder
-        for i in range(a, self.nb_layers + 1):
-            output = Conv2D(
-                start_neurons * 1, (3, 3), activation="relu", padding="same", name=f"ConvEnc{i}a"
-            )(output)
-            output = Conv2D(
-                start_neurons * 1, (3, 3), activation="relu", padding="same", name=f"ConvEnc{i}b"
-            )(output)
-            conv[i] = output
-            pool = MaxPooling2D((2, 2))(output)
-            output = Dropout(0.25)(pool)
+    up_stack = [
+        pix2pix.upsample(512, 3),  # 4x4 -> 8x8
+        pix2pix.upsample(256, 3),  # 8x8 -> 16x16
+        pix2pix.upsample(128, 3),  # 16x16 -> 32x32
+        pix2pix.upsample(64, 3),  # 32x32 -> 64x64
+    ]
 
-        # Middle
-        output = Conv2D(start_neurons * 16, (3, 3), activation="relu", padding="same", name="ConvMiddle1")(
-            output
-        )
-        output = Conv2D(start_neurons * 16, (3, 3), activation="relu", padding="same", name="ConvMiddle2")(
-            output
-        )
+    def unet_model(output_channels: int):
+        inputs = tf.keras.layers.Input(shape=[None, None, 3])
 
-        # Down
-        for i in range(self.nb_layers, 0, -1):
-            deconv = Conv2DTranspose(start_neurons * 8, (3, 3), strides=(2, 2), padding="same")(output)
-            output = concatenate([deconv, conv[i]])
-            output = Dropout(0.5)(output)
-            output = Conv2D(start_neurons * 8, (3, 3), activation="relu", padding="same")(output)
-            output = Conv2D(start_neurons * 8, (3, 3), activation="relu", padding="same")(output)
+        # Downsampling through the model
+        skips = down_stack(inputs)
+        x = skips[-1]
+        skips = reversed(skips[:-1])
 
-        output_layer = Conv2D(3, (1, 1), padding="same", activation="sigmoid")(output)
+        # Upsampling and establishing the skip connections
+        for up, skip in zip(up_stack, skips):
+            x = up(x)
+            concat = tf.keras.layers.Concatenate()
+            x = concat([x, skip])
 
-        model = Model(inputs=input_layer, outputs=output_layer)
-        model.compile(optimizer="adam", loss="binary_crossentropy")
+        # This is the last layer of the model
+        last = tf.keras.layers.Conv2DTranspose(
+            filters=output_channels, kernel_size=3, strides=2, padding="same"
+        )  # 64x64 -> 128x128
 
-        return model
+        x = last(x)
 
+        return tf.keras.Model(inputs=inputs, outputs=x)
 
-class VNetModel:
-    def __init__(self, nb_layers, start_neurons):
-        self.nb_layers = nb_layers
-        self.start_neurons = start_neurons
+    OUTPUT_CLASSES = 2
 
-    def __call__(self) -> Model:
-        input_img = Input(shape=(None, None, 3), name="image_input")
-        neuron = self.start_neurons
-        output = input_img
-
-        # Encoder
-        for i in range(self.nb_layers):
-            output = Conv2D(neuron, (3, 3), activation="relu", padding="same", name=f"ConvEnc{i}")(output)
-            output = MaxPooling2D((2, 2), padding="same", name=f"pool{i}")(output)
-            neuron *= 2
-
-        # Decoder
-        for i in range(self.nb_layers):
-            neuron = int(neuron / 2)
-            output = Conv2D(neuron, (3, 3), activation="relu", padding="same", name=f"ConvDec{i}")(output)
-            output = UpSampling2D((2, 2), name=f"upsample{i}")(output)
-
-        output = Conv2D(3, (3, 3), activation="sigmoid", padding="same", name="ConvDec")(output)
-        model = Model(inputs=input_img, outputs=output)
-        model.compile(optimizer="adam", loss="binary_crossentropy")
-        return model
+    model = unet_model(output_channels=OUTPUT_CLASSES)
+    model.compile(
+        optimizer="adam",
+        loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+        metrics=["accuracy"],
+    )
+    return model
 
 
-def model_32_64():
-    input_img = Input(shape=(None, None, 3), name="image_input")
-
-    # Encoder
-    x = Conv2D(32, (3, 3), activation="relu", padding="same", name="Conv1")(input_img)
-    x = MaxPooling2D((2, 2), padding="same", name="pool1")(x)
-    x = Conv2D(64, (3, 3), activation="relu", padding="same", name="Conv2")(x)
-    x = MaxPooling2D((2, 2), padding="same", name="pool2")(x)
-
-    # Decoder
-    x = Conv2D(64, (3, 3), activation="relu", padding="same", name="Conv3")(x)
-    x = UpSampling2D((2, 2), name="upsample1")(x)
-    x = Conv2D(32, (3, 3), activation="relu", padding="same", name="Conv4")(x)
-    x = UpSampling2D((2, 2), name="upsample2")(x)
-    x = Conv2D(3, (3, 3), activation="sigmoid", padding="same", name="Conv5")(x)
-
-    # Model
-    autoencoder = Model(inputs=input_img, outputs=x)
-    autoencoder.compile(optimizer="adam", loss="binary_crossentropy")
-
-    return autoencoder
-
-
-def model_64_128() -> Model:
-    input_img = Input(shape=(None, None, 3), name="image_input")
-
-    # Encoder
-    x = Conv2D(64, (3, 3), activation="relu", padding="same", name="ConvEnc1")(input_img)
-    x = MaxPooling2D((2, 2), padding="same", name="pool1")(x)
-    x = Conv2D(128, (3, 3), activation="relu", padding="same", name="ConvEnc2")(x)
-    x = MaxPooling2D((2, 2), padding="same", name="pool2")(x)
-
-    # Decoder
-    x = Conv2D(128, (3, 3), activation="relu", padding="same", name="ConvDec1")(x)
-    x = UpSampling2D((2, 2), name="upsample1")(x)
-    x = Conv2D(64, (3, 3), activation="relu", padding="same", name="ConvDec2")(x)
-    x = UpSampling2D((2, 2), name="upsample2")(x)
-    x = Conv2D(3, (3, 3), activation="sigmoid", padding="same", name="ConvDec3")(x)
-
-    # Model
-    autoencoder = Model(inputs=input_img, outputs=x)
-    autoencoder.compile(optimizer="adam", loss="binary_crossentropy")
-
-    return autoencoder
-
-
-def model_64_128_256() -> Model:
-    input_img = Input(shape=(None, None, 3), name="image_input")
-
-    # Encoder
-    x = Conv2D(64, (3, 3), activation="relu", padding="same", name="ConvEnc1")(input_img)
-    x = MaxPooling2D((2, 2), padding="same", name="pool1")(x)
-    x = Conv2D(128, (3, 3), activation="relu", padding="same", name="ConvEnc2")(x)
-    x = MaxPooling2D((2, 2), padding="same", name="pool2")(x)
-    x = Conv2D(256, (3, 3), activation="relu", padding="same", name="ConvEnc3")(x)
-    x = MaxPooling2D((2, 2), padding="same", name="pool3")(x)
-
-    # Decoder
-    x = Conv2D(256, (3, 3), activation="relu", padding="same", name="ConvDec1")(x)
-    x = UpSampling2D((2, 2), name="upsample1")(x)
-    x = Conv2D(128, (3, 3), activation="relu", padding="same", name="ConvDec2")(x)
-    x = UpSampling2D((2, 2), name="upsample2")(x)
-    x = Conv2D(64, (3, 3), activation="relu", padding="same", name="ConvDec3")(x)
-    x = UpSampling2D((2, 2), name="upsample3")(x)
-    x = Conv2D(3, (3, 3), activation="sigmoid", padding="same", name="ConvDec4")(x)
-
-    # Model
-    autoencoder = Model(inputs=input_img, outputs=x)
-    autoencoder.compile(optimizer="adam", loss="binary_crossentropy")
-
-    return autoencoder
-
-
-MODELS: dict[str, Callable[[], Model]] = {
-    # f"model_{IMAGE_DIMENSION}_YUV_32_64": model_32_64,
-    # f"model_{IMAGE_DIMENSION}_YUV_64_128": model_64_128,
-    # f"model_{IMAGE_DIMENSION}_YUV_64_128_256": model_64_128_256,
-    # f"model_{IMAGE_DIMENSION}_YUV_u_net_16": UNetModel(4, 16),
-    # f"model_{IMAGE_DIMENSION}_YUV_u_net_32": UNetModel(4, 32),
-    # f"model_{IMAGE_DIMENSION}_YUV_u_net_64": UNetModel(4, 64),
-    f"model_{IMAGE_DIMENSION}_YUV_v_net_2_32": VNetModel(2, 32),
-    f"model_{IMAGE_DIMENSION}_YUV_v_net_2_64": VNetModel(2, 64),
-    f"model_{IMAGE_DIMENSION}_YUV_v_net_3_8": VNetModel(3, 8),
-    f"model_{IMAGE_DIMENSION}_YUV_v_net_3_16": VNetModel(3, 16),
-    f"model_{IMAGE_DIMENSION}_YUV_v_net_3_32": VNetModel(3, 32),
-    f"model_{IMAGE_DIMENSION}_YUV_v_net_3_64": VNetModel(3, 64),
-    f"model_{IMAGE_DIMENSION}_YUV_v_net_3_128": VNetModel(3, 128),
-    f"model_{IMAGE_DIMENSION}_YUV_v_net_4_4": VNetModel(4, 4),
-    f"model_{IMAGE_DIMENSION}_YUV_v_net_4_8": VNetModel(4, 8),
-    f"model_{IMAGE_DIMENSION}_YUV_v_net_4_16": VNetModel(4, 16),
-    f"model_{IMAGE_DIMENSION}_YUV_v_net_4_32": VNetModel(4, 32),
-    f"model_{IMAGE_DIMENSION}_YUV_v_net_4_64": VNetModel(4, 64),
-    f"model_{IMAGE_DIMENSION}_YUV_v_net_4_128": VNetModel(4, 128),
+MODELS = {
+    f"UNet-pretrained-{IMAGE_SIZE}": model,
 }
 
 
 # Generator that returns the images
 class Images:
-    def __init__(self, filenames: list[str]):
+    def __init__(self, filenames: list[tuple[str, str]]):
         self.filenames = filenames
 
     def __call__(self):
-        for filename in self.filenames:
-            images = data_augmentation_image(filename, IMAGE_DIMENSION, save=False)
-            for image in images:
-                image = image.astype("float32") / 255.0
-                image = np.expand_dims(image, axis=0)
-                yield image, image
+        for train_filename, segmentation_filename in self.filenames:
+            train_images = data_augmentation_image(
+                train_filename, IMAGE_SIZE, save=False, segmentation=True, test=False
+            )
+            train_segmentation = data_augmentation_image(
+                segmentation_filename, IMAGE_SIZE, save=False, segmentation=True, test=True
+            )
+            for train_image, train_seg in zip(train_images, train_segmentation):
+                if len(train_seg.shape) == 3:
+                    # Add a axis
+                    train_image = np.expand_dims(train_image, axis=0)
+                    train_seg = np.expand_dims(train_seg, axis=0)
+                    yield train_image, train_seg
+                else:
+                    print(train_image.shape, train_seg.shape)
 
 
-def train_many(model_name: str, filenames: list[str], test: list[str]) -> None:
+def train_many(model_name: str, filenames: list[tuple[str, str]], test: list[tuple[str, str]]) -> None:
     if os.path.exists(f"results/{model_name}.keras"):
         model = keras.saving.load_model(f"results/{model_name}.keras")
     else:
@@ -228,20 +122,33 @@ def train_many(model_name: str, filenames: list[str], test: list[str]) -> None:
     if not os.path.exists(f"results/{model_name}.summary"):
         with open(f"results/{model_name}.summary", "w", encoding="utf-8") as summary_file:
             model.summary(print_fn=lambda x: summary_file.write(x + "\n"))
+    if not os.path.exists(f"results/{model_name}-model.png"):
+        tf.keras.utils.plot_model(
+            model,
+            to_file=f"results/{model_name}-model.png",
+            show_shapes=True,
+            show_dtype=True,
+            show_layer_names=True,
+            # expand_nested=True,
+            # show_layer_activations=True,
+            show_trainable=True,
+            rankdir="TB",
+            dpi=96,
+        )
 
     # create a tf.data.Dataset.from_generator that returns to numpy array od shape (255, 255, 3
     train = tf.data.Dataset.from_generator(
         Images(filenames),
         output_signature=(
-            tf.TensorSpec(shape=(None, None, None, 3), dtype=tf.float32),
-            tf.TensorSpec(shape=(None, None, None, 3), dtype=tf.float32),
+            tf.TensorSpec(shape=(1, None, None, 3), dtype=tf.float32),
+            tf.TensorSpec(shape=(1, None, None, 1), dtype=tf.float32),
         ),
     )
     val = tf.data.Dataset.from_generator(
         Images(test),
         output_signature=(
-            tf.TensorSpec(shape=(None, None, None, 3), dtype=tf.float32),
-            tf.TensorSpec(shape=(None, None, None, 3), dtype=tf.float32),
+            tf.TensorSpec(shape=(1, None, None, 3), dtype=tf.float32),
+            tf.TensorSpec(shape=(1, None, None, 1), dtype=tf.float32),
         ),
     )
 
@@ -254,11 +161,16 @@ def train_many(model_name: str, filenames: list[str], test: list[str]) -> None:
                 "loss": [],
                 "val_loss": [],
             }
-        hist = model.fit(
-            train,
-            validation_data=val,
-            batch_size=1000,
-        )
+        # for nb,(sample_image, masks) in enumerate(train.take(10)):
+        #    sample_image = cv2.cvtColor(sample_image.numpy().astype(np.uint8), cv2.COLOR_YUV2BGR)
+        #    masks = masks[:,:,0].numpy().astype(np.uint8)*255
+        #    masks = cv2.cvtColor(masks, cv2.COLOR_GRAY2BGR)
+        #    print(sample_image.shape)
+        #    print(masks.shape)
+        #    cv2.imwrite(f"a{nb}.png", sample_image)
+        #    cv2.imwrite(f"b{nb}.png", masks)
+        # exit()
+        hist = model.fit(train, validation_data=val, batch_size=4)
         history.setdefault("loss", []).append(hist.history["loss"])
         history.setdefault("val_loss", []).append(hist.history["val_loss"])
 
@@ -288,8 +200,8 @@ def _main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--name",
-        # default=f"model_{IMAGE_DIMENSION}_YUV_32_64",
-        # default=f"model_{IMAGE_DIMENSION}_YUV_64_128_256",
+        # default=f"model_{IMAGE_SIZE}_YUV_32_64",
+        # default=f"model_{IMAGE_SIZE}_YUV_64_128_256",
         default=list(MODELS.keys())[0],
         help="The name of the model, " + ", ".join(MODELS.keys()),
     )
@@ -329,11 +241,23 @@ def _main() -> None:
         return
 
     if args.file:
-        train_many(args.name, args.file, args.test)
+        train_many(args.name, zip(args.file, args.file), zip(args.test, args.test))
         return
     if args.generate_augmentation_image:
         data_augmentation_image(
-            list(glob.glob("clean-data/*.png"))[0], IMAGE_DIMENSION, category="test", save=True
+            list(glob.glob("clean-data/*.png"))[0],
+            IMAGE_SIZE,
+            category="test-seg-image",
+            segmentation=True,
+            save=True,
+        )
+        data_augmentation_image(
+            list(glob.glob("clean-data/*.png"))[0],
+            IMAGE_SIZE,
+            category="test-seg-mask",
+            segmentation=True,
+            test=True,
+            save=True,
         )
         return
     if args.models:
@@ -348,7 +272,13 @@ def _main() -> None:
             model = MODELS[args.name]()
         for test_file in get_status(args.name)["test_files"]:
             print(f"Testing {test_file} => results/{args.name}-{os.path.basename(test_file)}")
-            apply(model, test_file, f"results/{args.name}-{os.path.basename(test_file)}")
+            apply(
+                model,
+                test_file,
+                f"results/{args.name}-{os.path.basename(test_file)}",
+                segmentation=True,
+                square_size=32,
+            )
         exit()
 
     max = 0
@@ -359,7 +289,7 @@ def _main() -> None:
         else:
             assert args.name is not None
             run_model(args.name, 999999)
-        max += 5
+        max += NUMBER_OF_IMAGES
 
 
 def get_status(name):

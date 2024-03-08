@@ -1,3 +1,4 @@
+import glob
 import math
 import os.path
 import random
@@ -7,13 +8,18 @@ import numpy as np
 from scipy import ndimage
 
 dirty_images = []
+dirty_shape = []
 
 
 def data_augmentation_image(
-    image_filename, image_dimension, category=None, save=True, segmentation=False, test=False, mask=False
+    image_filename, image_dimension, category=None, save=True, segmentation=False, test=False
 ):
+    global dirty_images, dirty_shape
     if not dirty_images:
         dirty_images = [cv2.imread(filename) for filename in glob.glob("data/dirty/*.png")]
+        x = max([image.shape[0] for image in dirty_images])
+        y = max([image.shape[1] for image in dirty_images])
+        dirty_shape = (x, y)
 
     results = []
     image = cv2.imread(image_filename)
@@ -24,10 +30,12 @@ def data_augmentation_image(
     else:
         if test:
             image_bw = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-            image_2 = np.zeros([image.shape[0], image.shape[1], 1], dtype=np.uint8)
+            image_bw = np.expand_dims(image_bw, axis=-1)
+            image_2 = np.ones([max(dirty_shape[0], image.shape[0]), max(dirty_shape[1], image.shape[1]), 1], dtype=np.uint8)
+            # padding image_bw with 255 to fit with image_2
+            image_bw = np.pad(image_bw, ((0, image_2.shape[0] - image_bw.shape[0]), (0, image_2.shape[1] - image_bw.shape[1]), (0, 0)), mode='constant', constant_values=255)
 
-            # set image_2 to 255 where image is white
-            image_2[image_bw[:, :] > 250] = 1
+            image_2[image_bw < 250] = 0
             radius = 6
             kernel = np.zeros((2 * radius - 1, 2 * radius - 1), np.uint8)
             # draw a circle in the center
@@ -37,37 +45,13 @@ def data_augmentation_image(
         else:
             dirty_image = random.choice(dirty_images)
             image_dirty = np.zeros(
-                [max(dirty_image.shape[0], image.shape[0]), max(dirty_image.shape[1], image.shape[1]), 3],
+                [max(dirty_shape[0], image.shape[0]), max(dirty_shape[1], image.shape[1]), 3],
                 dtype=np.uint8,
             )
             image_dirty[0 : image.shape[0], 0 : image.shape[1]] = image
             image_dirty[0 : dirty_image.shape[0], 0 : dirty_image.shape[1]] -= 255 - dirty_image
             image = image_dirty
-
-        if not test:
-            # image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-            pass
-        else:
-            image_bw = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-            if mask:
-                image = np.expand_dims((image_bw / 255).astype(np.uint8), axis=-1)
-            else:
-                image_2 = np.zeros([image.shape[0], image.shape[1], 1], dtype=np.uint8)
-                image_2[image_bw[:, :] > 250] = 1
-
-                radius = 5
-                kernel = (
-                    np.array(
-                        [
-                            [x**2 + y**2 for x in range(-radius, radius + 1)]
-                            for y in range(-radius, radius + 1)
-                        ]
-                    )
-                    < (radius + 1) ** 2
-                )
-                image = cv2.erode(image_2, kernel)  # , iterations=1)
-        # image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
-        # image = cv2.cvtColor(image, cv2.COLOR_BGR2YUV)
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2YUV)
 
     # split the image into regular IMAGE_DIMENSIONxIMAGE_DIMENSION images
     nb_x = math.ceil(image.shape[0] / image_dimension)
@@ -125,8 +109,8 @@ def data_augmentation_image(
                     ),
                     cv2.cvtColor(results[-1], cv2.COLOR_YUV2BGR),
                 )
-            results += [np.flip(cropped)]
-            assert len(results[-1].shape) == 3
+            # flip up down
+            results += [np.flipud(cropped)]
             if save:
                 cv2.imwrite(
                     os.path.join(
@@ -137,6 +121,17 @@ def data_augmentation_image(
                 )
 
             if not segmentation:
+                results += [np.flip(cropped)]
+                assert len(results[-1].shape) == 3
+                if save:
+                    cv2.imwrite(
+                        os.path.join(
+                            dest_folder,
+                            f"flip{base}{os.path.basename(image_filename)}",
+                        ),
+                        cv2.cvtColor(results[-1], cv2.COLOR_YUV2BGR),
+                    )
+
                 # Change the background color (white), and the foreground color (black)
                 background_huv = [random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)]
                 forground_huv = [random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)]
@@ -184,6 +179,7 @@ def data_augmentation_image(
                     )
 
     if segmentation is False:
+        asfsdfg()
         scale = random.uniform(0.5, 0.9)
         # scale = 0.8
         image = cv2.resize(image, (0, 0), fx=scale, fy=scale)
