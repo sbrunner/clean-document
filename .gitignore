@@ -5,4 +5,5 @@ __pycache__/
 /clean-data
 /clean-test
 /results/*.png
+/results/*.npy
 /results/*-status.yaml
