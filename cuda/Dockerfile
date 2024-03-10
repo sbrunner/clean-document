@@ -9,13 +9,21 @@ FROM nvcr.io/nvidia/l4t-base:r36.2.0 as t
 
 SHELL ["/bin/bash", "-o", "pipefail", "-cux"]
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3-pip python-is-python3 \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
+ENV PATH=/pyenv/shims:/pyenv/bin:${PATH} \
+    PYENV_ROOT=/pyenv
+
+# Install different Python version with pyenv
+RUN --mount=type=cache,target=/var/lib/apt/lists \
+    --mount=type=cache,target=/var/cache,sharing=locked \
+    DEV_PACKAGES="build-essential libffi-dev libssl-dev liblzma-dev libsqlite3-dev libcurses-ocaml-dev libreadline-dev libbz2-dev zlib1g-dev" \
+    && apt-get update && apt-get install --assume-yes --no-install-recommends git curl zlib1g ${DEV_PACKAGES} \
+    && git clone --depth=1 https://github.com/pyenv/pyenv.git /pyenv \
+    && pyenv install 3.9
+
+# apt-get remove --purge --autoremove --yes ${DEV_PACKAGES}
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    nvidia-cuda-dev \
+    nvidia-cuda-dev nvidia-cudnn8-dev \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
@@ -45,7 +53,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpython3-dev build-essential \
+    build-essential \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
@@ -96,7 +104,6 @@ RUN python3 -m pip install --no-cache-dir numpy==1.22 future==0.18.2 mock==3.0.5
 RUN python3 --version && python3 -m pip install --extra-index-url https://developer.download.nvidia.com/compute/redist/jp/v46 tensorflow==2.6.2+nv21.12
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3-pip python-is-python3 \
     liblapack-dev \
     libblas-dev \
     libhdf5-serial-dev \
@@ -106,14 +113,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libjpeg8-dev \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
-
-#5 3404.9  libnvvpi3
-#5 3404.9  vpi3-dev
-#5 3404.9  vpi3-samples
-#5 3404.9  nvidia-vpi-dev
-#5 3404.9  nvidia-vpi
-#5 3404.9  python3.10-vpi3
-#5 3404.9  vpi3-python-src
 
 RUN apt-get update && apt-get download nvidia-l4t-jetson-multimedia-api \
     && dpkg-deb -R ./nvidia-l4t-jetson-multimedia-api_*_arm64.deb ./mm-api \
@@ -156,7 +155,7 @@ SHELL ["/bin/bash", "-o", "pipefail", "-cux"]
 # Install system deps
 RUN apt-get update
 RUN apt-get install --assume-yes --no-install-recommends \
-    git graphviz less python3-pip python-is-python3
+    git graphviz less
 
 # Install deps
 WORKDIR /app
