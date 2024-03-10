@@ -32,11 +32,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-# ???
-# RUN apt-get update && apt-get install -y --no-install-recommends \
-#     nvidia-tensorrt-dev \
-#     && rm -rf /var/lib/apt/lists/* \
-#     && apt-get clean
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    nvidia-tensorrt-dev \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
 # RUN apt-get update && apt-get install -y --no-install-recommends \
 #     nvidia-vpi-dev \
