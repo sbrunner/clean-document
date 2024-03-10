@@ -102,9 +102,6 @@ RUN pip install --no-cache-dir --upgrade pip
 RUN pip install --no-cache-dir testresources setuptools==65.5.0
 RUN pip install --no-cache-dir numpy==1.22 future==0.18.2 mock==3.0.5 keras_preprocessing==1.1.2 keras_applications==1.0.8 gast==0.4.0 protobuf pybind11 cython pkgconfig packaging h5py==3.7.0
 
-RUN curl https://developer.download.nvidia.com/compute/redist/jp/v46/tensorflow/tensorflow-2.6.2+nv21.12-cp36-cp36m-linux_aarch64.whl > tensorflow-2.6.2+nv21.12-cp36-cp36m-linux_aarch64.whl
-RUN pip install --no-cache-dir tensorflow-2.6.2+nv21.12-cp36-cp36m-linux_aarch64.whl
-
 #RUN pip install --extra-index-url https://developer.download.nvidia.com/compute/redist/jp/v512 tensorflow==2.12.0+nv23.06
 #RUN python --version && pip install --extra-index-url https://developer.download.nvidia.com/compute/redist/jp/v46 tensorflow==2.6.2+nv21.12
 
@@ -127,19 +124,17 @@ RUN apt-get update && apt-get download nvidia-l4t-jetson-multimedia-api \
 
 RUN ldconfig
 
-RUN pip3 install --no-cache-dir setuptools Cython wheel
+RUN curl https://developer.download.nvidia.com/compute/redist/jp/v46/tensorflow/tensorflow-2.6.2+nv21.12-cp36-cp36m-linux_aarch64.whl > tensorflow-2.6.2+nv21.12-cp36-cp36m-linux_aarch64.whl
+RUN pip install --no-cache-dir tensorflow-2.6.2+nv21.12-cp36-cp36m-linux_aarch64.whl
+
+RUN curl https://nvidia.box.com/shared/static/fjtbno0vpo676a25cgvuqc1wty0fkkg6.whl > torch.whl
+RUN pip install --no-cache-dir torch.whl
+
+RUN pip install --no-cache-dir setuptools Cython wheel
 
 # install Python TF dependencies
 RUN H5PY_SETUP_REQUIRES=0 pip install --no-cache-dir --verbose h5py
-RUN pip3 install --no-cache-dir --verbose future==0.18.2 mock==3.0.5 keras_preprocessing==1.1.2 keras_applications==1.0.8 gast==0.4.0 futures pybind11
-
-# TensorFlow
-ARG TENSORFLOW_URL
-ARG TENSORFLOW_WHL
-
-RUN wget --quiet --show-progress --progress=bar:force:noscroll --no-check-certificate ${TENSORFLOW_URL} -O ${TENSORFLOW_WHL} \
-    && pip3 install --no-cache-dir --verbose ${TENSORFLOW_WHL} \
-    && rm ${TENSORFLOW_WHL}
+RUN pip install --no-cache-dir --verbose future==0.18.2 mock==3.0.5 keras_preprocessing==1.1.2 keras_applications==1.0.8 gast==0.4.0 futures pybind11
 
 COPY scripts/* /usr/bin/
 
@@ -151,7 +146,7 @@ ENV NVIDIA_DRIVER_CAPABILITIES compute,utility
 
 RUN pip install nvidia-pyindex
 RUN pip install --upgrade nvidia-tensorrt
-RUN pip install torch gom
+RUN pip install gom
 
 RUN apt-get update
 RUN apt-get install --assume-yes --no-install-recommends \
