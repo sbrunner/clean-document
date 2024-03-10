@@ -13,9 +13,9 @@ except Exception as e:
 try:
     import tensorflow as tf
 
-    print(tf.__version__)
-    print(tf.config.list_physical_devices())
-    print("pip install tensorflow-gpu")
+    print(f"Tensorflow: version: {tf.__version__}")
+    for device in tf.config.list_physical_devices():
+        print(f"Tensorflow: {device.type}: {device.name}")
 except Exception as e:
     print("Tensorflow: not available")
     print(e)

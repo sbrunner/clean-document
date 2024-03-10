@@ -5,7 +5,7 @@
 # L4T 32.7.4
 # jetson_release
 
-FROM nvcr.io/nvidia/l4t-base:r36.2.0 as t
+FROM nvcr.io/nvidia/l4t-base:r36.2.0
 
 SHELL ["/bin/bash", "-o", "pipefail", "-cux"]
 
@@ -148,33 +148,12 @@ RUN python3 -m pip install nvidia-pyindex
 RUN python3 -m pip install --upgrade nvidia-tensorrt
 RUN python3 -m pip install torch gom
 
-FROM nvidia/cuda:12.3.2-base-ubuntu22.04 as base
-
-SHELL ["/bin/bash", "-o", "pipefail", "-cux"]
-
-# Install system deps
 RUN apt-get update
 RUN apt-get install --assume-yes --no-install-recommends \
-    git graphviz less
-
-# Install deps
-WORKDIR /app
-RUN pip install poetry
-COPY pyproject.toml poetry.lock ./
-RUN poetry export --with=dev --without-hashes --output=requirements.txt
-RUN pip install --no-deps --requirement=requirements.txt
-
-# Install the app
-WORKDIR /app
-RUN pip install --upgrade pip
-COPY clean_document ./clean_document
-COPY pyproject.toml poetry.lock README.md ./
-RUN pip install --no-deps --editable=.
+    graphviz less
 
 COPY scripts/* /usr/bin/
 
 ENV LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgomp.so.1:${LD_PRELOAD}
 
 WORKDIR /data
-
-FROM t
