@@ -46,7 +46,7 @@ jobs:
         with:
           context: cuda
           platforms: linux/arm64
-          push: dalse
+          push: false
           tags: sbrunner/clean-documents:latest
 
       - run: echo "${HOME}/.local/bin" >> ${GITHUB_PATH}
