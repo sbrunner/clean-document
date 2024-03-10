@@ -124,15 +124,15 @@ RUN apt-get update && apt-get download nvidia-l4t-jetson-multimedia-api \
 
 RUN ldconfig
 
-RUN curl https://developer.download.nvidia.com/compute/redist/jp/v46/tensorflow/tensorflow-2.6.2+nv21.12-cp36-cp36m-linux_aarch64.whl > tensorflow-2.6.2+nv21.12-cp36-cp36m-linux_aarch64.whl
-RUN pip install --no-cache-dir tensorflow-2.6.2+nv21.12-cp36-cp36m-linux_aarch64.whl
+#RUN curl https://developer.download.nvidia.com/compute/redist/jp/v46/tensorflow/tensorflow-2.6.2+nv21.12-cp36-cp36m-linux_aarch64.whl > tensorflow-2.6.2+nv21.12-cp36-cp36m-linux_aarch64.whl
+#RUN pip install --no-cache-dir tensorflow-2.6.2+nv21.12-cp36-cp36m-linux_aarch64.whl
 
-RUN curl https://nvidia.box.com/shared/static/fjtbno0vpo676a25cgvuqc1wty0fkkg6.whl > torch.whl
-RUN pip install --no-cache-dir torch.whl
+#RUN curl https://nvidia.box.com/shared/static/fjtbno0vpo676a25cgvuqc1wty0fkkg6.whl > torch.whl
+#RUN pip install --no-cache-dir torch.whl
 
 RUN pip install --no-cache-dir setuptools Cython wheel
 
-# install Python TF dependencies
+# Install Python TF dependencies
 RUN H5PY_SETUP_REQUIRES=0 pip install --no-cache-dir --verbose h5py
 RUN pip install --no-cache-dir --verbose future==0.18.2 mock==3.0.5 keras_preprocessing==1.1.2 keras_applications==1.0.8 gast==0.4.0 futures pybind11
 
@@ -147,6 +147,8 @@ ENV NVIDIA_DRIVER_CAPABILITIES compute,utility
 RUN pip install nvidia-pyindex
 RUN pip install --upgrade nvidia-tensorrt
 RUN pip install gom
+RUN pip install --no-cache-dir tensorflow
+RUN pip install --no-cache-dir torch
 
 RUN apt-get update
 RUN apt-get install --assume-yes --no-install-recommends \
