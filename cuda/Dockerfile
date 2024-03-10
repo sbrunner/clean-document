@@ -97,6 +97,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
+RUN pyenv global 3.9
 RUN pip install --no-cache-dir --upgrade pip
 RUN pip install --no-cache-dir testresources setuptools==65.5.0
 RUN pip install --no-cache-dir numpy==1.22 future==0.18.2 mock==3.0.5 keras_preprocessing==1.1.2 keras_applications==1.0.8 gast==0.4.0 protobuf pybind11 cython pkgconfig packaging h5py==3.7.0
