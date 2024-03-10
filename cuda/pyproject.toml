@@ -1,0 +1,31 @@
+[tool.black]
+line-length = 110
+target-version = ['py310']
+
+[tool.isort]
+profile = "black"
+line_length = 110
+
+[tool.poetry]
+name = "clean_document"
+version = "0.0.0"
+description = ""
+authors = ["Stéphane Brunner <stephane.brunner@camptocamp.com>"]
+license = "BSD"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = ">=3.8,<3.12"
+opencv-python-headless = "*"
+
+[tool.poetry.group.dev.dependencies]
+scikit-image = "*"
+pikepdf = "*"
+pyyaml = "*"
+tensorflow-examples = { git = "https://github.com/tensorflow/examples.git" }
+pydot = "*"
+keras = "*"
+matplotlib = "*"
+numpy = "*"
+scikit-learn = "*"
+torch = "*"

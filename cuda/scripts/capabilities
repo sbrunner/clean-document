@@ -1,0 +1,21 @@
+#!/usr/bin/env python3
+
+try:
+    import torch.cuda
+
+    print(f"Torch: is CUDA available: {torch.cuda.is_available()}")
+    print(f"Torch: CUDA device: {torch.cuda.device}")
+    # print(torch.cuda.get_device_capability())
+except Exception as e:
+    print("Torch: CUDA not available")
+    print(e)
+
+try:
+    import tensorflow as tf
+
+    print(tf.__version__)
+    print(tf.config.list_physical_devices())
+    print("pip install tensorflow-gpu")
+except Exception as e:
+    print("Tensorflow: not available")
+    print(e)

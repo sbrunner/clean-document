@@ -1,0 +1,18 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/camptocamp/c2cciutils/1.6/c2cciutils/schema.json
+
+publish:
+  pypi:
+    packages: []
+  docker:
+    dispatch: {}
+    repository:
+      github:
+        server: ghcr.io
+        versions:
+          - version_tag
+          - version_branch
+          - rebuild
+          - feature_branch
+      docker_hub: false
+    images:
+      - name: sbrunner/clean-documents

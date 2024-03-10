@@ -1,0 +1,27 @@
+#!/usr/bin/env python3
+
+# https://huggingface.co/stabilityai/stable-diffusion-x4-upscaler
+# pip install diffusers transformers accelerate scipy safetensors
+
+# https://huggingface.co/docs/diffusers/api/pipelines/stable_diffusion/img2img
+
+import torch
+from diffusers import StableDiffusionUpscalePipeline
+from PIL import Image
+
+# load model and scheduler
+model_id = "stabilityai/stable-diffusion-x4-upscaler"
+pipeline = StableDiffusionUpscalePipeline.from_pretrained(model_id, torch_dtype=torch.float16)
+pipeline = pipeline.to("cuda")
+
+# let's download an  image
+# load low-res image
+low_res_img = Image.open("maxresdefault.jpeg").convert("RGB")
+low_res_img = low_res_img.resize((128, 128))
+
+prompt = "family"
+
+upscaled_image = pipeline(prompt=prompt, image=low_res_img).images[0]
+# save image
+upscaled_image.save("maxresdefault_bis.png")
+upscaled_image.save("maxresdefault_bis.jpeg")
