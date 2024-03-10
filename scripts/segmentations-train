@@ -1,0 +1,393 @@
+#!/usr/bin/env python3
+import argparse
+import glob
+import os.path
+import random
+import subprocess
+import sys
+
+import cv2
+import keras.saving
+import matplotlib.pyplot as plt
+import numpy as np
+import tensorflow as tf
+import yaml
+from matplotlib import pyplot as plt
+from scipy import ndimage
+from skimage import color, exposure, io, morphology, transform
+from skimage.draw import disk
+from tensorflow_examples.models.pix2pix import pix2pix
+
+from clean_document.apply import apply
+from clean_document.utils import data_augmentation_image
+
+NUMBER_OF_IMAGES = 1
+IMAGE_SIZE = 2048
+IMAGE_SIZE = 1024
+
+# TODO
+# - separate denozing and removing folds, staple mark, hole punch.
+# https://keras-io.translate.goog/examples/vision/autoencoder/?_x_tr_sl=auto&_x_tr_tl=fr&_x_tr_hl=fr
+
+
+def model():
+    base_model = tf.keras.applications.MobileNetV2(input_shape=[None, None, 3], include_top=False)
+
+    # Use the activations of these layers
+    layer_names = [
+        "block_1_expand_relu",  # 64x64
+        "block_3_expand_relu",  # 32x32
+        "block_6_expand_relu",  # 16x16
+        "block_13_expand_relu",  # 8x8
+        "block_16_project",  # 4x4
+    ]
+    base_model_outputs = [base_model.get_layer(name).output for name in layer_names]
+
+    # Create the feature extraction model
+    down_stack = tf.keras.Model(inputs=base_model.input, outputs=base_model_outputs)
+
+    down_stack.trainable = False
+
+    up_stack = [
+        pix2pix.upsample(512, 3),  # 4x4 -> 8x8
+        pix2pix.upsample(256, 3),  # 8x8 -> 16x16
+        pix2pix.upsample(128, 3),  # 16x16 -> 32x32
+        pix2pix.upsample(64, 3),  # 32x32 -> 64x64
+    ]
+
+    def unet_model(output_channels: int):
+        inputs = tf.keras.layers.Input(shape=[None, None, 3])
+
+        # Downsampling through the model
+        skips = down_stack(inputs)
+        x = skips[-1]
+        skips = reversed(skips[:-1])
+
+        # Upsampling and establishing the skip connections
+        for up, skip in zip(up_stack, skips):
+            x = up(x)
+            concat = tf.keras.layers.Concatenate()
+            x = concat([x, skip])
+
+        # This is the last layer of the model
+        last = tf.keras.layers.Conv2DTranspose(
+            filters=output_channels, kernel_size=3, strides=2, padding="same"
+        )  # 64x64 -> 128x128
+
+        x = last(x)
+
+        return tf.keras.Model(inputs=inputs, outputs=x)
+
+    OUTPUT_CLASSES = 2
+
+    model = unet_model(output_channels=OUTPUT_CLASSES)
+    model.compile(
+        optimizer="adam",
+        loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+        metrics=["accuracy"],
+    )
+    return model
+
+
+MODELS = {
+    f"segmentation-{IMAGE_SIZE}": model,
+}
+
+dirty_image_file_name = random.choice(glob.glob("data/dirty/*.png"))
+dirty_image = io.imread(dirty_image_file_name)
+
+image_gray = cv2.cvtColor(dirty_image, cv2.COLOR_BGR2GRAY)
+# add black band at the image bottom
+image_gray = np.vstack((image_gray, np.zeros((50, image_gray.shape[1]))))
+
+image_treshold = image_gray > 200
+image_treshold = image_treshold.astype(np.uint8) * 255
+# dilate (denoise)
+image_treshold = cv2.dilate(image_treshold, np.ones((10, 10), np.uint8), iterations=1)
+# erode
+image_treshold = cv2.erode(image_treshold, np.ones((30, 30), np.uint8), iterations=1)
+# remove the black band
+segmentation_image = image_treshold[:-50, :]
+
+
+# Generator that returns the images
+class Images:
+    def __init__(self, filenames: list[tuple[str, str]]):
+        self.filenames = filenames
+
+    def __call__(self):
+        for train_filename, segmentation_filename in self.filenames:
+            image = io.imread(train_filename)
+            width = max(image.shape[0], segmentation_image.shape[0])
+            height = max(image.shape[1], segmentation_image.shape[1])
+            if width != image.shape[0]:
+                # Add white band at the right
+                image = np.hstack(
+                    (image, np.ones((image.shape[0], height - image.shape[1], 3), dtype=np.uint8) * 255)
+                )
+            if height != image.shape[1]:
+                # Add white band at the bottom
+                image = np.vstack(
+                    (image, np.ones((width - image.shape[0], image.shape[1], 3), dtype=np.uint8) * 255)
+                )
+            current_segmentation_image = segmentation_image.copy()
+            if width != current_segmentation_image.shape[0]:
+                # Add black band at the right
+                current_segmentation_image = np.hstack(
+                    (
+                        current_segmentation_image,
+                        np.zeros(
+                            (
+                                current_segmentation_image.shape[0],
+                                height - current_segmentation_image.shape[1],
+                            ),
+                            dtype=np.uint8,
+                        ),
+                    )
+                )
+            if height != current_segmentation_image.shape[1]:
+                # Add black band at the bottom
+                current_segmentation_image = np.vstack(
+                    (
+                        current_segmentation_image,
+                        np.zeros(
+                            (
+                                width - current_segmentation_image.shape[0],
+                                current_segmentation_image.shape[1],
+                            ),
+                            dtype=np.uint8,
+                        ),
+                    )
+                )
+
+            # combine dirty_image and image
+            image = image - 255 + dirty_image
+
+            train_images = data_augmentation_image(image, IMAGE_SIZE)
+            train_segmentation = data_augmentation_image(current_segmentation_image, IMAGE_SIZE)
+            for train_image, train_seg in zip(train_images, train_segmentation):
+                if len(train_seg.shape) == 3:
+                    # Add a axis
+                    train_image = np.expand_dims(train_image, axis=0)
+                    train_seg = np.expand_dims(train_seg, axis=0)
+                    yield train_image, train_seg
+                else:
+                    print(train_image.shape, train_seg.shape)
+
+
+def train_many(model_name: str, filenames: list[tuple[str, str]], test: list[tuple[str, str]]) -> None:
+    if os.path.exists(f"results/{model_name}.keras"):
+        model = keras.saving.load_model(f"results/{model_name}.keras")
+    else:
+        model = MODELS[model_name]()
+    if not os.path.exists(f"results/{model_name}.summary"):
+        with open(f"results/{model_name}.summary", "w", encoding="utf-8") as summary_file:
+            model.summary(print_fn=lambda x: summary_file.write(x + "\n"))
+    if not os.path.exists(f"results/{model_name}-model.png"):
+        tf.keras.utils.plot_model(
+            model,
+            to_file=f"results/{model_name}-model.png",
+            show_shapes=True,
+            show_dtype=True,
+            show_layer_names=True,
+            # expand_nested=True,
+            # show_layer_activations=True,
+            show_trainable=True,
+            rankdir="TB",
+            dpi=96,
+        )
+
+    # create a tf.data.Dataset.from_generator that returns to numpy array od shape (255, 255, 3
+    train = tf.data.Dataset.from_generator(
+        Images(filenames),
+        output_signature=(
+            tf.TensorSpec(shape=(1, None, None, 3), dtype=tf.float32),
+            tf.TensorSpec(shape=(1, None, None, 1), dtype=tf.float32),
+        ),
+    )
+    val = tf.data.Dataset.from_generator(
+        Images(test),
+        output_signature=(
+            tf.TensorSpec(shape=(1, None, None, 3), dtype=tf.float32),
+            tf.TensorSpec(shape=(1, None, None, 1), dtype=tf.float32),
+        ),
+    )
+
+    try:
+        if os.path.exists(f"results/{model_name}-history.yaml"):
+            with open(f"results/{model_name}-history.yaml", encoding="utf-8") as history_file:
+                history = yaml.load(history_file.read(), Loader=yaml.SafeLoader)
+        else:
+            history = {
+                "loss": [],
+                "val_loss": [],
+            }
+        # for nb,(sample_image, masks) in enumerate(train.take(10)):
+        #    sample_image = cv2.cvtColor(sample_image.numpy().astype(np.uint8), cv2.COLOR_YUV2BGR)
+        #    masks = masks[:,:,0].numpy().astype(np.uint8)*255
+        #    masks = cv2.cvtColor(masks, cv2.COLOR_GRAY2BGR)
+        #    print(sample_image.shape)
+        #    print(masks.shape)
+        #    cv2.imwrite(f"a{nb}.png", sample_image)
+        #    cv2.imwrite(f"b{nb}.png", masks)
+        # exit()
+        hist = model.fit(train, validation_data=val, batch_size=4)
+        history.setdefault("loss", []).append(hist.history["loss"])
+        history.setdefault("val_loss", []).append(hist.history["val_loss"])
+
+        plt.plot(history["loss"])
+        plt.plot(history["val_loss"])
+        plt.title("Model loss")
+        plt.ylabel("Loss")
+        plt.legend(["Train", "Test"], loc="upper left")
+        # Save plot to file
+        plt.savefig(f"results/{model_name}.png")
+
+        # Save the model
+        model.save(f"results/{model_name}.keras", overwrite=True)
+        with open(f"results/{model_name}-history.yaml", "w", encoding="utf-8") as history_file:
+            history_file.write(yaml.dump(history))
+
+        for test_file in test:
+            print(f"Testing {test_file} => results/{model_name}-{os.path.basename(test_file)}")
+            apply(model, test_file, f"results/{model_name}-{os.path.basename(test_file)}")
+
+    except Exception as e:
+        print(f"Failed to train model {model_name}: {e}")
+        raise e
+
+
+def _main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--name",
+        # default=f"model_{IMAGE_SIZE}_YUV_32_64",
+        # default=f"model_{IMAGE_SIZE}_YUV_64_128_256",
+        default=list(MODELS.keys())[0],
+        help="The name of the model, " + ", ".join(MODELS.keys()),
+    )
+    parser.add_argument("--file", action="append", help="The files to process")
+    parser.add_argument("--test", action="append", help="The test files")
+    parser.add_argument("--apply", action="store_true", help="Generate the test files")
+    parser.add_argument("--models", action="store_true", help="List the models")
+    parser.add_argument("--all", action="store_true", help="run on all models")
+    parser.add_argument("--ln", action="store_true", help="create ling from grouped directory")
+    parser.add_argument(
+        "--generate-augmentation-image", action="store_true", help="Generate the data augmentation images"
+    )
+
+    args = parser.parse_args()
+
+    if args.ln:
+        for model in MODELS.keys():
+            for filename in glob.glob(f"results/{model}*"):
+                suffix = os.path.basename(filename)[len(model) :]
+                if suffix.startswith("."):
+                    dir = suffix[1:]
+                    suffix = f"{model}{suffix}"
+                elif suffix.startswith("-"):
+                    suffix_split = suffix[1:].split(".")
+                    dir = suffix_split[0]
+                    suffix = f"{model}.{suffix_split[1]}"
+                else:
+                    suffix_split = suffix.split(".")
+                    dir = suffix_split[0]
+                    suffix = f"{model}.{suffix_split[1]}"
+                if not os.path.exists(f"results/{dir}"):
+                    os.makedirs(f"results/{dir}")
+                if os.path.exists(f"results/{dir}/{suffix}"):
+                    os.remove(f"results/{dir}/{suffix}")
+                print(f"results/{dir}/{suffix}", f"../{os.path.basename(filename)}")
+                os.symlink(f"../{os.path.basename(filename)}", f"results/{dir}/{suffix}")
+        return
+
+    if args.file:
+        train_many(args.name, zip(args.file, args.file), zip(args.test, args.test))
+        return
+    if args.generate_augmentation_image:
+        data_augmentation_image(
+            list(glob.glob("clean-data/*.png"))[0],
+            IMAGE_SIZE,
+            category="test-seg-image",
+            segmentation=True,
+            save=True,
+        )
+        data_augmentation_image(
+            list(glob.glob("clean-data/*.png"))[0],
+            IMAGE_SIZE,
+            category="test-seg-mask",
+            segmentation=True,
+            test=True,
+            save=True,
+        )
+        return
+    if args.models:
+        for model in MODELS.keys():
+            print(model)
+        return
+
+    if args.apply:
+        if os.path.exists(f"results/{args.name}.keras"):
+            model = keras.saving.load_model(f"results/{args.name}.keras")
+        else:
+            model = MODELS[args.name]()
+        for test_file in get_status(args.name)["test_files"]:
+            print(f"Testing {test_file} => results/{args.name}-{os.path.basename(test_file)}")
+            apply(
+                model,
+                test_file,
+                f"results/{args.name}-{os.path.basename(test_file)}",
+                segmentation=True,
+                square_size=32,
+            )
+        exit()
+
+    max = 0
+    while True:
+        if args.all:
+            for model in MODELS.keys():
+                run_model(model, max)
+        else:
+            assert args.name is not None
+            run_model(args.name, 999999)
+        max += NUMBER_OF_IMAGES
+
+
+def get_status(name):
+    if os.path.exists(f"results/{name}-status.yaml"):
+        with open(f"results/{name}-status.yaml", encoding="utf-8") as status_file:
+            return yaml.load(status_file.read(), Loader=yaml.SafeLoader)
+    else:
+        files = list(glob.glob("clean-data/*.png"))
+        random.shuffle(files)
+        return {
+            "files": files,
+            "index": 0,
+            "epoch": 0,
+            "test_files": list(glob.glob("clean-test/*.png")),
+        }
+
+
+def run_model(name, max):
+    status = get_status(name)
+
+    filenames = status["files"]
+
+    if status["index"] < len(filenames) and status["index"] < max:
+        files = filenames[status["index"] : status["index"] + NUMBER_OF_IMAGES]
+        print("=" * 18)
+        print(f"Epoch {status['epoch']} {status['index']}/{len(filenames)}")
+        print("=" * 18)
+
+        cmd = [sys.argv[0], f"--name={name}"]
+        cmd += [f"--file={filename}" for filename in files]
+        cmd += [f"--test={filename}" for filename in status["test_files"]]
+        subprocess.run(cmd, check=True)
+
+        status["index"] += NUMBER_OF_IMAGES
+        with open(f"results/{name}-status.yaml", "w", encoding="utf-8") as status_file:
+            status_file.write(yaml.dump(status))
+
+
+if __name__ == "__main__":
+    _main()
