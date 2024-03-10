@@ -275,7 +275,7 @@ class Images:
                 yield dirty_image, image
 
 
-def train_many(model_name: str, filenames: list[str], test: list[str]) -> None:
+def train_many(model_name: str, filenames: list[str], test: list[str], gen_images: bool) -> None:
     if os.path.exists(f"results/{model_name}.keras"):
         model = keras.saving.load_model(f"results/{model_name}.keras")
     else:
@@ -292,6 +292,14 @@ def train_many(model_name: str, filenames: list[str], test: list[str]) -> None:
             tf.TensorSpec(shape=(None, None, None, 3), dtype=tf.float32),
         ),
     )
+    if gen_images:
+        # Get the first image
+        for nb, (sample_image, segmentation) in enumerate(train.take(1)):
+            # save the images
+            cv2.imwrite(f"results/{model_name}-noisy-{nb}.png", sample_image.numpy().astype(np.uint8)[0])
+            cv2.imwrite(f"results/{model_name}-clean-{nb}.png", segmentation.numpy().astype(np.uint8)[0])
+        return ()
+
     val = tf.data.Dataset.from_generator(
         Images(test),
         output_signature=(
@@ -339,10 +347,108 @@ def train_many(model_name: str, filenames: list[str], test: list[str]) -> None:
         raise e
 
 
-for model_name in MODELS:
-    model = MODELS[model_name]()
-    try:
-        for n, i in enumerate(list(glob.glob("clean-test/*.png"))):
-            apply(model, i, f"test/{model_name}-{n}.png")
-    except Exception as e:
-        print(f"Failed to apply model {model_name}: {e}")
+# for model_name in MODELS:
+#    model = MODELS[model_name]()
+#    try:
+#        for n, i in enumerate(list(glob.glob("clean-test/*.png"))):
+#            apply(model, i, f"test/{model_name}-{n}.png")
+#    except Exception as e:
+#        print(f"Failed to apply model {model_name}: {e}")
+
+
+def _main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--name",
+        # default=f"model_{IMAGE_SIZE}_YUV_32_64",
+        # default=f"model_{IMAGE_SIZE}_YUV_64_128_256",
+        default=list(MODELS.keys())[0],
+        help="The name of the model, " + ", ".join(MODELS.keys()),
+    )
+    parser.add_argument("--file", action="append", help="The files to process")
+    parser.add_argument("--test", action="append", help="The test files")
+    parser.add_argument("--apply", action="store_true", help="Generate the test files")
+    parser.add_argument("--models", action="store_true", help="List the models")
+    parser.add_argument("--all", action="store_true", help="run on all models")
+    parser.add_argument("--ln", action="store_true", help="create link from grouped directory")
+    parser.add_argument(
+        "--generate-augmentation-image", action="store_true", help="Generate the data augmentation images"
+    )
+
+    args = parser.parse_args()
+
+    if args.ln:
+        for model in MODELS.keys():
+            for filename in glob.glob(f"results/{model}*"):
+                suffix = os.path.basename(filename)[len(model) :]
+                if suffix.startswith("."):
+                    dir = suffix[1:]
+                    suffix = f"{model}{suffix}"
+                elif suffix.startswith("-"):
+                    suffix_split = suffix[1:].split(".")
+                    dir = suffix_split[0]
+                    suffix = f"{model}.{suffix_split[1]}"
+                else:
+                    suffix_split = suffix.split(".")
+                    dir = suffix_split[0]
+                    suffix = f"{model}.{suffix_split[1]}"
+                if not os.path.exists(f"results/{dir}"):
+                    os.makedirs(f"results/{dir}")
+                if os.path.exists(f"results/{dir}/{suffix}"):
+                    os.remove(f"results/{dir}/{suffix}")
+                print(f"results/{dir}/{suffix}", f"../{os.path.basename(filename)}")
+                os.symlink(f"../{os.path.basename(filename)}", f"results/{dir}/{suffix}")
+        return
+
+    if args.file:
+        train_many(args.name, args.file, args.test, args.generate_augmentation_image)
+        return
+    if args.models:
+        for model in MODELS.keys():
+            print(model)
+        return
+
+    if args.apply:
+        if os.path.exists(f"results/{args.name}.keras"):
+            model = keras.saving.load_model(f"results/{args.name}.keras")
+        else:
+            model = MODELS[args.name]()
+        for test_file in get_status(args.name)["test_files"]:
+            print(f"Testing {test_file} => results/{args.name}-{os.path.basename(test_file)}")
+            apply(
+                model,
+                test_file,
+                f"results/{args.name}-{os.path.basename(test_file)}",
+                segmentation=True,
+                square_size=32,
+            )
+        exit()
+
+    max_ = 0
+    while True:
+        if args.all:
+            for model in MODELS.keys():
+                run_model(model, max)
+        else:
+            assert args.name is not None
+            run_model(args.name, 999999)
+        max_ += NUMBER_OF_IMAGES
+
+
+def get_status(name):
+    if os.path.exists(f"results/{name}-status.yaml"):
+        with open(f"results/{name}-status.yaml", encoding="utf-8") as status_file:
+            return yaml.load(status_file.read(), Loader=yaml.SafeLoader)
+    else:
+        files = list(glob.glob("clean-data/*.png"))
+        random.shuffle(files)
+        return {
+            "files": files,
+            "index": 0,
+            "epoch": 0,
+            "test_files": list(glob.glob("clean-test/*.png")),
+        }
+
+
+if __name__ == "__main__":
+    _main()

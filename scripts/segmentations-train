@@ -175,7 +175,7 @@ class Images:
                     print(train_image.shape, train_seg.shape)
 
 
-def train_many(model_name: str, filenames: list[tuple[str, str]], test: list[tuple[str, str]]) -> None:
+def train_many(model_name: str, filenames: list[str], test: list[str], gen_images: bool) -> None:
     if os.path.exists(f"results/{model_name}.keras"):
         model = keras.saving.load_model(f"results/{model_name}.keras")
     else:
@@ -205,6 +205,16 @@ def train_many(model_name: str, filenames: list[tuple[str, str]], test: list[tup
             tf.TensorSpec(shape=(1, None, None, 1), dtype=tf.float32),
         ),
     )
+    if gen_images:
+        # Get the first image
+        for nb, (sample_image, segmentation) in enumerate(train.take(1)):
+            # save the images
+            cv2.imwrite(f"results/{model_name}-image-{nb}.png", sample_image.numpy().astype(np.uint8)[0])
+            cv2.imwrite(
+                f"results/{model_name}-segmentation-{nb}.png", segmentation.numpy().astype(np.uint8)[0]
+            )
+        return ()
+
     val = tf.data.Dataset.from_generator(
         Images(test),
         output_signature=(
@@ -271,7 +281,7 @@ def _main() -> None:
     parser.add_argument("--apply", action="store_true", help="Generate the test files")
     parser.add_argument("--models", action="store_true", help="List the models")
     parser.add_argument("--all", action="store_true", help="run on all models")
-    parser.add_argument("--ln", action="store_true", help="create ling from grouped directory")
+    parser.add_argument("--ln", action="store_true", help="create link from grouped directory")
     parser.add_argument(
         "--generate-augmentation-image", action="store_true", help="Generate the data augmentation images"
     )
@@ -302,7 +312,7 @@ def _main() -> None:
         return
 
     if args.file:
-        train_many(args.name, zip(args.file, args.file), zip(args.test, args.test))
+        train_many(args.name, args.file, args.test, args.generate_augmentation_image)
         return
     if args.models:
         for model in MODELS.keys():
@@ -325,7 +335,7 @@ def _main() -> None:
             )
         exit()
 
-    max = 0
+    max_ = 0
     while True:
         if args.all:
             for model in MODELS.keys():
@@ -333,7 +343,7 @@ def _main() -> None:
         else:
             assert args.name is not None
             run_model(args.name, 999999)
-        max += NUMBER_OF_IMAGES
+        max_ += NUMBER_OF_IMAGES
 
 
 def get_status(name):
