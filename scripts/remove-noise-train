@@ -180,14 +180,47 @@ def model_64_128_256() -> Model:
     return autoencoder
 
 
+def model():
+    input_ = layers.Input(shape=(None, None, 3))
+
+    # Encoder
+    x = layers.Conv2D(32, (3, 3), activation="relu", padding="same")(input_)
+    x = layers.MaxPooling2D((2, 2), padding="same")(x)
+    x = layers.Conv2D(32, (3, 3), activation="relu", padding="same")(x)
+    x = layers.MaxPooling2D((2, 2), padding="same")(x)
+
+    # Decoder
+    x = layers.Conv2DTranspose(32, (3, 3), strides=2, activation="relu", padding="same")(x)
+    x = layers.Conv2DTranspose(32, (3, 3), strides=2, activation="relu", padding="same")(x)
+    x = layers.Conv2D(1, (3, 3), activation="sigmoid", padding="same")(x)
+
+    # Autoencoder
+    autoencoder = Model(input, x)
+    autoencoder.compile(optimizer="adam", loss="binary_crossentropy")
+    return autoencoder
+
+
 MODELS = {
-    f"model_{IMAGE_DIMENSION}_YUV_32_64": model_32_64,
-    f"model_{IMAGE_DIMENSION}_YUV_64_128": model_64_128,
-    f"model_{IMAGE_DIMENSION}_YUV_64_128_256": model_64_128_256,
-    f"model_{IMAGE_DIMENSION}_YUV_u_net_16": model_u_net_16,
-    f"model_{IMAGE_DIMENSION}_YUV_u_net_32": model_u_net_32,
-    f"model_{IMAGE_DIMENSION}_YUV_u_net_64": model_u_net_64,
+    f"denoise_{IMAGE_DIMENSION}": model,
 }
+
+
+dirty_image_file_name = random.choice(glob.glob("data/dirty/*.png"))
+dirty_image = io.imread(dirty_image_file_name)
+
+image_gray = cv2.cvtColor(dirty_image, cv2.COLOR_BGR2GRAY)
+# add black band at the image bottom
+image_gray = np.vstack((image_gray, np.zeros((50, image_gray.shape[1]))))
+
+image_treshold = image_gray > 200
+image_treshold = image_treshold.astype(np.uint8) * 255
+# dilate (denoise)
+image_treshold = cv2.dilate(image_treshold, np.ones((10, 10), np.uint8), iterations=1)
+# erode
+image_treshold = cv2.erode(image_treshold, np.ones((50, 50), np.uint8), iterations=1)
+# remove the black band
+image_treshold = image_treshold[:-50, :]
+dirty_image[image_treshold < 127] = [255, 255, 255]
 
 
 # Generator that returns the images
@@ -197,11 +230,49 @@ class Images:
 
     def __call__(self):
         for filename in self.filenames:
-            images = data_augmentation_image(filename, IMAGE_DIMENSION, save=False)
-            for image in images:
-                image = image.astype("float32") / 255.0
-                image = np.expand_dims(image, axis=0)
-                yield image, image
+            image = io.imread(train_filename)
+            width = max(image.shape[0], dirty_image.shape[0])
+            height = max(image.shape[1], dirty_image.shape[1])
+            if width != image.shape[0]:
+                # Add white band at the right
+                image = np.hstack(
+                    (image, np.ones((image.shape[0], height - image.shape[1], 3), dtype=np.uint8) * 255)
+                )
+            if height != image.shape[1]:
+                # Add white band at the bottom
+                image = np.vstack(
+                    (image, np.ones((width - image.shape[0], image.shape[1], 3), dtype=np.uint8) * 255)
+                )
+            dirty_image.copy()
+            if width != current_dirty_image.shape[0]:
+                # Add white band at the right
+                current_dirty_image = np.hstack(
+                    (
+                        current_dirty_image,
+                        np.ones(
+                            (current_dirty_image.shape[0], height - current_dirty_image.shape[1], 3),
+                            dtype=np.uint8,
+                        )
+                        * 255,
+                    )
+                )
+            if height != current_dirty_image.shape[1]:
+                # Add white band at the bottom
+                current_dirty_image = np.vstack(
+                    (
+                        current_dirty_image,
+                        np.ones(
+                            (width - current_dirty_image.shape[0], current_dirty_image.shape[1], 3),
+                            dtype=np.uint8,
+                        )
+                        * 255,
+                    )
+                )
+
+            current_dirty_images = data_augmentation_image(current_dirty_image, IMAGE_DIMENSION)
+            images = data_augmentation_image(image, IMAGE_DIMENSION)
+            for dirty_image, image in zip(current_dirty_images, images):
+                yield dirty_image, image
 
 
 def train_many(model_name: str, filenames: list[str], test: list[str]) -> None:

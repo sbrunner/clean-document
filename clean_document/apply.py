@@ -1,10 +1,11 @@
 import math
 import os
 
-import cv2
 import keras.models
 import numpy as np
-import tensorflow as tf
+from scipy import ndimage
+from skimage import color, exposure, filters, io, morphology, transform
+from skimage.draw import disk
 
 
 def apply(
@@ -19,7 +20,7 @@ def apply(
     model_input_shape = model.input_shape[1:]
     model_output_shape = model.output_shape[1:]
 
-    image = cv2.imread(image_src_filename)
+    image = io.imread(image_src_filename)
     original_image = None
     predictions = None
     if segmentation:
@@ -38,10 +39,10 @@ def apply(
         )
 
     if model_input_shape[2] == 1:
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        image = color.rgb2gray(image)
         image = np.expand_dims(image, axis=-1)
     elif not yuv:
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2YUV)
+        image = color.rgb2yuv(image)
 
     if model_input_shape[0] is None and model_input_shape[1] is None:
         sample_test_img = np.expand_dims(image, axis=0).astype("float32") / 255.0
@@ -127,7 +128,7 @@ def apply(
         #    print(np.min(image[:, :, i]), np.max(image[:, :, i]))
         #    mask = ((image[:, :, i] - min) / (max - min) * 255).astype(np.uint8)
         #    print(np.min(mask), np.max(mask))
-        #    cv2.imwrite(f"{file_name[0]}-mask{i}{file_name[1]}", mask)
+        #    io.imwrite(f"{file_name[0]}-mask{i}{file_name[1]}", mask)
 
         # predictions = predictions[:, :, 1]
         # Apply the mask to the original image
@@ -136,37 +137,36 @@ def apply(
         # save the predictions as numpy array
         np.save(f"{file_name[0]}{file_name[1]}", predictions)
 
-        max = 1280/4
+        max = 1280 / 4
         min = -max
         mask = predictions
         # Save the prediction as a mask
-        cv2.imwrite(f"{file_name[0]}-mask{file_name[1]}", ((mask - min) / (max - min) * 255).astype(np.uint8))
+        io.imwrite(f"{file_name[0]}-mask{file_name[1]}", ((mask - min) / (max - min) * 255).astype(np.uint8))
 
         # mask = (predictions > 0).astype(np.uint8) * 255
         # blur the mask
-        mask = cv2.GaussianBlur(mask, (9, 9), 0)
-        #mask = cv2.GaussianBlur(mask, (3, 3), 0)
-        cv2.imwrite(f"{file_name[0]}-mask2{file_name[1]}", ((mask - min) / (max - min) * 255).astype(np.uint8))
+        mask = filters.gaussian(mask, sigma=1)
+        io.imwrite(f"{file_name[0]}-mask2{file_name[1]}", ((mask - min) / (max - min) * 255).astype(np.uint8))
         # 10
         mask = (mask > 0).astype(np.uint8)
 
         # erode the mask
         kernel = np.ones((3, 3), np.uint8)
-        mask = cv2.erode(mask, kernel, iterations=1)
+        mask = morphology.erosion(mask, selem=kernel)
 
-        cv2.imwrite(f"{file_name[0]}-mask-tresh{file_name[1]}", mask * 255)
+        io.imwrite(f"{file_name[0]}-mask-tresh{file_name[1]}", mask * 255)
 
         image = original_image
         # save the original image
-        cv2.imwrite(f"{file_name[0]}-original{file_name[1]}", image)
+        io.imwrite(f"{file_name[0]}-original{file_name[1]}", image)
         image[mask == 1] = [255, 255, 255]
     else:
         if model_output_shape[2] == 1:
             # to BGR
-            image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+            image = color.graytorgb(image)
         elif yuv:
             # to BGR
-            image = cv2.cvtColor(image, cv2.COLOR_YUV2BGR)
+            image = color.yuvtorgb(image)
 
     # Save the image
-    cv2.imwrite(image_dst_filename, image)
+    io.imwrite(image_dst_filename, image)

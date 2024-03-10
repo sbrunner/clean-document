@@ -13,6 +13,7 @@ publish:
           - version_branch
           - rebuild
           - feature_branch
-      docker_hub: false
+      docker_hub:
+        versions: []
     images:
       - name: sbrunner/clean-documents
