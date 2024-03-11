@@ -4,7 +4,7 @@ publish:
   pypi:
     packages: []
   docker:
-    dispatch: {}
+    dispatch: false
     repository:
       github:
         server: ghcr.io
