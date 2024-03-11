@@ -8,6 +8,7 @@ import os.path
 import random
 import subprocess
 import sys
+from typing import List
 
 import cv2
 import keras
@@ -236,7 +237,7 @@ dirty_image[image_treshold < 127] = [255, 255, 255]
 
 # Generator that returns the images
 class Images:
-    def __init__(self, filenames: list[str]):
+    def __init__(self, filenames: List[str]):
         self.filenames = filenames
 
     def __call__(self):
@@ -286,7 +287,7 @@ class Images:
                 yield dirty_image, image
 
 
-def train_many(model_name: str, filenames: list[str], test: list[str], gen_images: bool) -> None:
+def train_many(model_name: str, filenames: List[str], test: List[str], gen_images: bool) -> None:
     # if os.path.exists(f"results/{model_name}.keras"):
     #    model = keras.saving.load_model(f"results/{model_name}.keras")
     # else:
