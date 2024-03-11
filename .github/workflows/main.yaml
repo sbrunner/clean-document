@@ -28,7 +28,7 @@ jobs:
       - run: df -h
         if: always()
       - run: docker image ls
-      - run: docker login ghcr.io --username=${{ secrets.GITHUB_ACTOR }} --password=${{ secrets.GITHUB_TOKEN }}
+      - run: docker login ghcr.io --username=GitHub --password=${{ secrets.GITHUB_TOKEN }}
 
       - run: echo "${HOME}/.local/bin" >> ${GITHUB_PATH}
       - run: python3 -m pip install --user --requirement=ci/requirements.txt
@@ -63,7 +63,7 @@ jobs:
       - run: df -h
         if: always()
       - run: docker image ls
-      - run: docker login ghcr.io --username=${{ secrets.GITHUB_ACTOR }} --password=${{ secrets.GITHUB_TOKEN }}
+      - run: docker login ghcr.io --username=GitHub --password=${{ secrets.GITHUB_TOKEN }}
 
       - run: echo "${HOME}/.local/bin" >> ${GITHUB_PATH}
       - run: python3 -m pip install --user --requirement=ci/requirements.txt
