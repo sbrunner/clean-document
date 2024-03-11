@@ -25,15 +25,7 @@ jobs:
         uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      - name: Build
-        uses: docker/build-push-action@v5
-        with:
-          context: cuda
-          platforms: linux/arm64
-          push: false
-          tags: sbrunner/clean-documents:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - run: docker build --platform=linux/amd64 --tag=sbrunner/clean-documents cuda
       - run: df -h
         if: always()
       - run: docker image ls
