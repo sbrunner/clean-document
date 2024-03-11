@@ -15,7 +15,7 @@ try:
 
     print(f"Tensorflow: version: {tf.__version__}")
     for device in tf.config.list_physical_devices():
-        print(f"Tensorflow: {device.type}: {device.name}")
+        print(f"Tensorflow: {device.device_type}: {device.name}")
 except Exception as e:
     print("Tensorflow: not available")
     print(e)
