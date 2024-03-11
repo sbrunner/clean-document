@@ -25,6 +25,10 @@ jobs:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
       - run: docker build --platform=linux/amd64 --tag=sbrunner/clean-documents cuda
+      - run: df -h
+        if: always()
+      - run: docker image ls
+      - run: docker login ghcr.io --username=${{ secrets.GITHUB_ACTOR }} --password=${{ secrets.GITHUB_TOKEN }}
 
       - run: echo "${HOME}/.local/bin" >> ${GITHUB_PATH}
       - run: python3 -m pip install --user --requirement=ci/requirements.txt

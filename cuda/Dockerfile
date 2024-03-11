@@ -24,7 +24,14 @@ RUN python3 -c 'import cv2; print(cv2.__version__)'
 #RUN python3 -c 'import torch; print(torch.__version__)'
 RUN python3 -c 'import tensorflow; print(tensorflow.__version__)'
 
+RUN apt-get remove --purge --autoremove --yes \
+    python3.9 python3.8-dev
+
 RUN apt-get clean
+
+RUN rm -rf /root/.cache /root/.cargo /root/.jupyter /root/.keras /root/.rustup /root/.wget-hsts
+
+RUN python3 -m pip uninstall --yes torch torchvision
 
 FROM scratch as clean_document
 COPY --from=base / /
