@@ -13,13 +13,7 @@ import numpy as np
 import tensorflow as tf
 import yaml
 from matplotlib import pyplot as plt
-from scipy import ndimage
-from skimage import color, exposure, io, morphology, transform
-from skimage.draw import disk
 from tensorflow_examples.models.pix2pix import pix2pix
-
-from clean_document.apply import apply
-from clean_document.utils import data_augmentation_image
 
 NUMBER_OF_IMAGES = 1
 IMAGE_SIZE = 2048
@@ -260,7 +254,7 @@ def train_many(model_name: str, filenames: list[str], test: list[str], gen_image
 
         for test_file in test:
             print(f"Testing {test_file} => results/{model_name}-{os.path.basename(test_file)}")
-            apply(model, test_file, f"results/{model_name}-{os.path.basename(test_file)}")
+            # apply(model, test_file, f"results/{model_name}-{os.path.basename(test_file)}")
 
     except Exception as e:
         print(f"Failed to train model {model_name}: {e}")
@@ -320,6 +314,8 @@ def _main() -> None:
         return
 
     if args.apply:
+        from clean_document.apply import apply
+
         if os.path.exists(f"results/{args.name}.keras"):
             model = keras.saving.load_model(f"results/{args.name}.keras")
         else:
@@ -339,7 +335,7 @@ def _main() -> None:
     while True:
         if args.all:
             for model in MODELS.keys():
-                run_model(model, max)
+                run_model(model, max_)
         else:
             assert args.name is not None
             run_model(args.name, 999999)
@@ -361,12 +357,12 @@ def get_status(name):
         }
 
 
-def run_model(name, max):
+def run_model(name, max_):
     status = get_status(name)
 
     filenames = status["files"]
 
-    if status["index"] < len(filenames) and status["index"] < max:
+    if status["index"] < len(filenames) and status["index"] < max_:
         files = filenames[status["index"] : status["index"] + NUMBER_OF_IMAGES]
         print("=" * 18)
         print(f"Epoch {status['epoch']} {status['index']}/{len(filenames)}")

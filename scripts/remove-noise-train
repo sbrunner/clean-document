@@ -1,20 +1,27 @@
 #!/usr/bin/env python3
 
+import argparse
 import glob
 import os.path
 
+# import keras.saving
+import random
+import subprocess
+import sys
+
 import cv2
-import keras.saving
+import keras
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
 import yaml
+from keras import layers
 from keras.layers import Conv2D, Conv2DTranspose, Dropout, Input, MaxPooling2D, UpSampling2D, concatenate
 from keras.models import Model
 
-from clean_document.apply import apply
-from clean_document.utils import data_augmentation_image
-
+# keras==2.3.1 max 2.5.0
+# https://faroit.com/keras-docs/2.0.5/
+# install python3-tk
 NUMBER_OF_IMAGES = 5
 IMAGE_DIMENSION = 256
 
@@ -180,22 +187,26 @@ def model_64_128_256() -> Model:
     return autoencoder
 
 
+from keras.layers import Conv2D, Conv2DTranspose, Input, MaxPooling2D
+from keras.models import Model
+
+
 def model():
-    input_ = layers.Input(shape=(None, None, 3))
+    input_ = Input(shape=(None, None, 3))
 
     # Encoder
-    x = layers.Conv2D(32, (3, 3), activation="relu", padding="same")(input_)
-    x = layers.MaxPooling2D((2, 2), padding="same")(x)
-    x = layers.Conv2D(32, (3, 3), activation="relu", padding="same")(x)
-    x = layers.MaxPooling2D((2, 2), padding="same")(x)
+    x = Conv2D(32, (3, 3), activation="relu", padding="same")(input_)
+    x = MaxPooling2D((2, 2), padding="same")(x)
+    x = Conv2D(32, (3, 3), activation="relu", padding="same")(x)
+    x = MaxPooling2D((2, 2), padding="same")(x)
 
     # Decoder
-    x = layers.Conv2DTranspose(32, (3, 3), strides=2, activation="relu", padding="same")(x)
-    x = layers.Conv2DTranspose(32, (3, 3), strides=2, activation="relu", padding="same")(x)
-    x = layers.Conv2D(1, (3, 3), activation="sigmoid", padding="same")(x)
+    x = Conv2DTranspose(32, (3, 3), strides=2, activation="relu", padding="same")(x)
+    x = Conv2DTranspose(32, (3, 3), strides=2, activation="relu", padding="same")(x)
+    x = Conv2D(1, (3, 3), activation="sigmoid", padding="same")(x)
 
     # Autoencoder
-    autoencoder = Model(input, x)
+    autoencoder = Model(input_, x)
     autoencoder.compile(optimizer="adam", loss="binary_crossentropy")
     return autoencoder
 
@@ -206,7 +217,7 @@ MODELS = {
 
 
 dirty_image_file_name = random.choice(glob.glob("data/dirty/*.png"))
-dirty_image = io.imread(dirty_image_file_name)
+dirty_image = cv2.imread(dirty_image_file_name)
 
 image_gray = cv2.cvtColor(dirty_image, cv2.COLOR_BGR2GRAY)
 # add black band at the image bottom
@@ -230,7 +241,7 @@ class Images:
 
     def __call__(self):
         for filename in self.filenames:
-            image = io.imread(train_filename)
+            image = cv2.imread(filename)
             width = max(image.shape[0], dirty_image.shape[0])
             height = max(image.shape[1], dirty_image.shape[1])
             if width != image.shape[0]:
@@ -276,22 +287,35 @@ class Images:
 
 
 def train_many(model_name: str, filenames: list[str], test: list[str], gen_images: bool) -> None:
-    if os.path.exists(f"results/{model_name}.keras"):
-        model = keras.saving.load_model(f"results/{model_name}.keras")
-    else:
-        model = MODELS[model_name]()
+    # if os.path.exists(f"results/{model_name}.keras"):
+    #    model = keras.saving.load_model(f"results/{model_name}.keras")
+    # else:
+    model = MODELS[model_name]()
     if not os.path.exists(f"results/{model_name}.summary"):
         with open(f"results/{model_name}.summary", "w", encoding="utf-8") as summary_file:
             model.summary(print_fn=lambda x: summary_file.write(x + "\n"))
 
     # create a tf.data.Dataset.from_generator that returns to numpy array od shape (255, 255, 3
-    train = tf.data.Dataset.from_generator(
-        Images(filenames),
-        output_signature=(
-            tf.TensorSpec(shape=(None, None, None, 3), dtype=tf.float32),
-            tf.TensorSpec(shape=(None, None, None, 3), dtype=tf.float32),
-        ),
-    )
+    # train = tf.data.Dataset.from_generator(
+    #     Images(filenames),
+    #     output_signature=(
+    #         tf.TensorSpec(shape=(None, None, None, 3), dtype=tf.float32),
+    #         tf.TensorSpec(shape=(None, None, None, 3), dtype=tf.float32),
+    #     ),
+    # )
+    def gen_x():
+        for image in Images(filenames)():
+            print(type(image[0]))
+            print(dir(image[0]))
+            yield image[0]
+
+    def gen_y():
+        for image in Images(filenames)():
+            yield image[1]
+
+    # x = tf.data.Dataset.from_generator(gen_x, output_types=(tf.float32, tf.float32))
+    # y = tf.data.Dataset.from_generator(gen_y, output_types=(tf.float32, tf.float32))
+
     if gen_images:
         # Get the first image
         for nb, (sample_image, segmentation) in enumerate(train.take(1)):
@@ -300,13 +324,14 @@ def train_many(model_name: str, filenames: list[str], test: list[str], gen_image
             cv2.imwrite(f"results/{model_name}-clean-{nb}.png", segmentation.numpy().astype(np.uint8)[0])
         return ()
 
-    val = tf.data.Dataset.from_generator(
-        Images(test),
-        output_signature=(
-            tf.TensorSpec(shape=(None, None, None, 3), dtype=tf.float32),
-            tf.TensorSpec(shape=(None, None, None, 3), dtype=tf.float32),
-        ),
-    )
+    # val = tf.data.Dataset.from_generator(
+    #     Images(test),
+    #     output_signature=(
+    #         tf.TensorSpec(shape=(None, None, None, 3), dtype=tf.float32),
+    #         tf.TensorSpec(shape=(None, None, None, 3), dtype=tf.float32),
+    #     ),
+    # )
+    val = tf.data.Dataset.from_generator(Images(test), output_types=(tf.float32, tf.float32))
 
     try:
         if os.path.exists(f"results/{model_name}-history.yaml"):
@@ -318,9 +343,9 @@ def train_many(model_name: str, filenames: list[str], test: list[str], gen_image
                 "val_loss": [],
             }
         hist = model.fit(
-            train,
-            validation_data=val,
-            batch_size=100,
+            Images(filenames)(),
+            # validation_data=val,
+            # batch_size=100,
         )
         history.setdefault("loss", []).append(hist.history["loss"])
         history.setdefault("val_loss", []).append(hist.history["val_loss"])
@@ -340,7 +365,7 @@ def train_many(model_name: str, filenames: list[str], test: list[str], gen_image
 
         for test_file in test:
             print(f"Testing {test_file} => results/{model_name}-{os.path.basename(test_file)}")
-            apply(model, test_file, f"results/{model_name}-{os.path.basename(test_file)}")
+            # apply(model, test_file, f"results/{model_name}-{os.path.basename(test_file)}")
 
     except Exception as e:
         print(f"Failed to train model {model_name}: {e}")
@@ -354,6 +379,27 @@ def train_many(model_name: str, filenames: list[str], test: list[str], gen_image
 #            apply(model, i, f"test/{model_name}-{n}.png")
 #    except Exception as e:
 #        print(f"Failed to apply model {model_name}: {e}")
+
+
+def run_model(name, max_):
+    status = get_status(name)
+
+    filenames = status["files"]
+
+    if status["index"] < len(filenames) and status["index"] < max_:
+        files = filenames[status["index"] : status["index"] + NUMBER_OF_IMAGES]
+        print("=" * 18)
+        print(f"Epoch {status['epoch']} {status['index']}/{len(filenames)}")
+        print("=" * 18)
+
+        cmd = [sys.argv[0], f"--name={name}"]
+        cmd += [f"--file={filename}" for filename in files]
+        cmd += [f"--test={filename}" for filename in status["test_files"]]
+        subprocess.run(cmd, check=True)
+
+        status["index"] += NUMBER_OF_IMAGES
+        with open(f"results/{name}-status.yaml", "w", encoding="utf-8") as status_file:
+            status_file.write(yaml.dump(status))
 
 
 def _main() -> None:
@@ -409,10 +455,12 @@ def _main() -> None:
         return
 
     if args.apply:
-        if os.path.exists(f"results/{args.name}.keras"):
-            model = keras.saving.load_model(f"results/{args.name}.keras")
-        else:
-            model = MODELS[args.name]()
+        from clean_document.apply import apply
+
+        # if os.path.exists(f"results/{args.name}.keras"):
+        #    model = keras.saving.load_model(f"results/{args.name}.keras")
+        # else:
+        model = MODELS[args.name]()
         for test_file in get_status(args.name)["test_files"]:
             print(f"Testing {test_file} => results/{args.name}-{os.path.basename(test_file)}")
             apply(
@@ -428,7 +476,7 @@ def _main() -> None:
     while True:
         if args.all:
             for model in MODELS.keys():
-                run_model(model, max)
+                run_model(model, max_)
         else:
             assert args.name is not None
             run_model(args.name, 999999)
