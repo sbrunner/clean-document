@@ -15,6 +15,7 @@ jobs:
 
     steps:
       - uses: visable-dev/gh-action-cleanup-workspace@v1
+      - run: df -h
       # Versions
       - run: docker system prune --all --force
       - run: docker --version
@@ -38,6 +39,7 @@ jobs:
 
     steps:
       - uses: visable-dev/gh-action-cleanup-workspace@v1
+      - run: df -h
       - uses: actions/checkout@v4
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
