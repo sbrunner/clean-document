@@ -6,38 +6,10 @@ on:
 env:
   HAS_SECRETS: ${{ secrets.HAS_SECRETS }}
 
+permissions:
+  packages: write
+
 jobs:
-  main:
-    name: Continuous integration
-    runs-on: ubuntu-22.04
-    timeout-minutes: 90
-    if: "!startsWith(github.event.head_commit.message, '[skip ci] ')"
-
-    steps:
-      - name: Free Disk Space (Ubuntu)
-        uses: insightsengineering/disk-space-reclaimer@v1
-      - run: df -h
-      # Versions
-      - run: docker system prune --all --force
-      - run: docker --version
-      - uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-      - run: docker build --platform=linux/amd64 --tag=sbrunner/clean-documents cuda
-      - run: df -h
-        if: always()
-      - run: docker image ls
-      - run: docker login ghcr.io --username=GitHub --password=${{ secrets.GITHUB_TOKEN }}
-
-      - run: echo "${HOME}/.local/bin" >> ${GITHUB_PATH}
-      - run: python3 -m pip install --user --requirement=ci/requirements.txt
-      - name: Publish
-        run: c2cciutils-publish
-        if: env.HAS_SECRETS == 'HAS_SECRETS'
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-
   docker:
     name: Continuous integration
     runs-on: ubuntu-22.04
