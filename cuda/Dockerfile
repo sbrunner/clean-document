@@ -9,6 +9,9 @@ FROM nvcr.io/nvidia/l4t-ml:r32.7.1-py3 as base
 
 SHELL ["/bin/bash", "-o", "pipefail", "-cux"]
 
+RUN python3 -c 'import cv2; print(cv2.__version__)'
+RUN python3 -c 'import tensorflow; print(tensorflow.__version__)'
+
 RUN apt-get update
 RUN apt-get install --assume-yes --no-install-recommends \
     graphviz less
