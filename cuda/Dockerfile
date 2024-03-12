@@ -5,7 +5,7 @@
 # L4T 32.7.4
 # jetson_release
 
-FROM nvcr.io/nvidia/l4t-ml:r35.2.1-py3 as base
+FROM nvcr.io/nvidia/l4t-ml:r32.7.1-py3 as base
 
 SHELL ["/bin/bash", "-o", "pipefail", "-cux"]
 
@@ -17,6 +17,8 @@ RUN apt-get remove --purge --autoremove --yes \
     build-essential python2 python3.9 python3.8-dev
 
 RUN apt-get clean
+
+RUN python3 -m pip install keras==2.3.1
 
 RUN python3 -m pip uninstall --yes torch torchvision
 
