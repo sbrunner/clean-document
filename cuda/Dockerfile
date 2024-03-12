@@ -14,7 +14,7 @@ RUN apt-get install --assume-yes --no-install-recommends \
     graphviz less
 
 RUN apt-get remove --purge --autoremove --yes \
-    build-essential python2 python3.9 python3.8-dev
+    build-essential python3.8-dev
 
 RUN apt-get clean
 
