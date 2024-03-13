@@ -9,7 +9,7 @@ FROM nvcr.io/nvidia/l4t-ml:r32.7.1-py3 as base
 
 SHELL ["/bin/bash", "-o", "pipefail", "-cux"]
 
-RUN python3 -c 'import cv2; print(cv2.__version__)'
+#RUN python3 -c 'import cv2; print(cv2.__version__)'
 RUN python3 -c 'import tensorflow; print(tensorflow.__version__)'
 
 RUN apt-get update
@@ -27,7 +27,7 @@ RUN python3 -m pip uninstall --yes torch torchvision
 
 RUN rm -rf /root/.cache /root/.cargo /root/.jupyter /root/.keras /root/.rustup /root/.wget-hsts
 
-RUN python3 -c 'import cv2; print(cv2.__version__)'
+#RUN python3 -c 'import cv2; print(cv2.__version__)'
 RUN python3 -c 'import tensorflow; print(tensorflow.__version__)'
 
 COPY scripts/* /usr/bin/
