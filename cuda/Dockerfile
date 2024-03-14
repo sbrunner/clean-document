@@ -5,7 +5,7 @@
 # L4T 32.7.4
 # jetson_release
 
-FROM nvcr.io/nvidia/l4t-ml:r32.7.1-py3 as base
+FROM nvcr.io/nvidia/l4t-tensorflow:r32.7.1-tf2.7-py3 as base
 
 SHELL ["/bin/bash", "-o", "pipefail", "-cux"]
 
