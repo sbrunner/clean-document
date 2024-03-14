@@ -14,7 +14,7 @@ SHELL ["/bin/bash", "-o", "pipefail", "-cux"]
 
 RUN apt-get update
 RUN apt-get install --assume-yes --no-install-recommends \
-    graphviz less
+    graphviz less python3-tk
 
 RUN apt-get remove --purge --autoremove --yes \
     build-essential
