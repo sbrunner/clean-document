@@ -23,8 +23,6 @@ RUN apt-get clean
 
 RUN python3 -m pip install keras==2.3.1
 
-RUN python3 -m pip uninstall --yes torch torchvision
-
 RUN rm -rf /root/.cache /root/.cargo /root/.jupyter /root/.keras /root/.rustup /root/.wget-hsts
 
 #RUN python3 -c 'import cv2; print(cv2.__version__)'
