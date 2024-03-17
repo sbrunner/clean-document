@@ -13,6 +13,7 @@ SHELL ["/bin/bash", "-o", "pipefail", "-cux"]
 #RUN python3 -c 'import tensorflow; print(tensorflow.__version__)'
 
 RUN apt-get update
+ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get install --assume-yes --no-install-recommends \
     graphviz less python3-tk
 
