@@ -29,6 +29,8 @@ jobs:
       - run: df -h
         if: always()
       - run: docker image ls
+      - run: docker run --rm sbrunner/clean-documents bash -c 'du -sh /*'
+      - run: docker run --rm sbrunner/clean-documents bash -c 'du -sh /*/*'
       - run: docker login ghcr.io --username=GitHub --password=${{ secrets.GITHUB_TOKEN }}
 
       - run: echo "${HOME}/.local/bin" >> ${GITHUB_PATH}
