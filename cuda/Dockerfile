@@ -23,7 +23,7 @@ RUN --mount=type=cache,target=/var/cache/apt \
 RUN --mount=type=cache,target=/root/.cache \
     python3 -m pip install scikit-build
 RUN --mount=type=cache,target=/root/.cache \
-    python3 -m pip install keras==2.3.1 opencv-python-headless
+    python3 -m pip install keras opencv-python-headless
 
 RUN --mount=type=cache,target=/var/cache/apt \
     --mount=type=cache,target=/var/cache,sharing=locked \
